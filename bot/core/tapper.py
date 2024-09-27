@@ -168,7 +168,6 @@ class Tapper:
         if response.status == 200:
             response_json = await response.json()
             self.user_id = response_json['data']['id']
-            self.session_name = response_json['data']['name']
             logger.info(self.log_message(f"Got into seed app - Username: <green>{response_json['data']['name']}</green>"))
             if response_json['data']['give_first_egg'] is False:
                 await self.get_first_egg_and_hatch(http_client)
@@ -432,6 +431,7 @@ class Tapper:
         await asyncio.sleep(delay=random_delay)
 
         access_token_created_time = 0
+        tg_web_data = None
 
         while True:
             proxy_conn = {'connector': ProxyConnector.from_url(self.proxy)} if self.proxy else {}
@@ -444,7 +444,7 @@ class Tapper:
 
                 token_live_time = random.randint(3500, 3600)
                 try:
-                    if time() - access_token_created_time >= token_live_time:
+                    if time() - access_token_created_time >= token_live_time or not tg_web_data:
                         tg_web_data = await self.get_tg_web_data()
 
                         if not tg_web_data:
