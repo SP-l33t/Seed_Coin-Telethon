@@ -33,7 +33,7 @@
 | **REF_ID**                     |                                                                                              Your referral id after startapp= (Your telegram ID)                                                                                              |
 | **RANDOM_SESSION_START_DELAY** |                                                                                        Random delay at session start from 1 to set value (e.g. **30**)                                                                                        |
 | **SESSIONS_PER_PROXY**         |                                                                                            Amount of sessions, that can share same proxy ( **1** )                                                                                            |
-| **USE_PROXY_FROM_FILE**        |                                                                                  Whether to use a proxy from the bot/config/proxies.txt file (True / False)                                                                                   |
+| **USE_PROXY_FROM_FILE**        |                                                                                Whether to use a proxy from the bot/config/proxies.txt file (**True** / False)                                                                                 |
 | **DEVICE_PARAMS**              |                                                                          Enter device settings to make the telegram session look more realistic  (True / **False**)                                                                           |
 
 
