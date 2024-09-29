@@ -14,8 +14,8 @@ from time import time
 
 from telethon import TelegramClient
 from telethon.errors import *
-from telethon.types import InputUser, InputBotAppShortName, InputPeerUser
-from telethon.functions import messages, contacts
+from telethon.types import InputBotAppShortName
+from telethon.functions import messages
 
 from .agents import generate_random_user_agent
 from bot.config import settings
@@ -65,8 +65,8 @@ class Tapper:
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
 
         self.headers = headers
-        self.headers['User-Agent'] = self.check_user_agent()
-        self.headers.update(**get_sec_ch_ua(self.headers.get('User-Agent', '')))
+        self.headers['user-agent'] = self.check_user_agent()
+        self.headers.update(**get_sec_ch_ua(self.headers.get('user-agent', '')))
 
         self._webview_data = None
 
@@ -417,8 +417,7 @@ class Tapper:
         total_page = int(float(json_data['data']['total'] / json_data['data']['page_size'])) + count
         for page in range(2, total_page + 1):
             response = await http_client.get(
-                f"https://elb.seeddao.org/api/v1/history-log-market/me?market_type=worm&page={page}&history_type=sell",
-                headers=headers)
+                f"https://elb.seeddao.org/api/v1/history-log-market/me?market_type=worm&page={page}&history_type=sell")
             json_data = await response.json()
             for worm in json_data['data']['items']:
                 if worm['status'] == "on-sale":

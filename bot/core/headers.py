@@ -32,6 +32,6 @@ def get_sec_ch_ua(user_agent):
         else:
             sec_ch_ua = f'"Chromium";v="{version}", "Not;A=Brand";v="24"'
 
-        return {'Sec-Ch-Ua': sec_ch_ua}
+        return {'sec-ch-ua': sec_ch_ua}
     else:
         return {}
