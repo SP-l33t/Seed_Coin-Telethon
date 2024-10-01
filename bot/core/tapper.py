@@ -1,6 +1,5 @@
 import aiohttp
 import asyncio
-import fasteners
 import os
 import pytz
 import random
@@ -19,7 +18,7 @@ from telethon.functions import messages
 
 from .agents import generate_random_user_agent
 from bot.config import settings
-from bot.utils import logger, log_error, proxy_utils, config_utils, CONFIG_PATH
+from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -48,7 +47,7 @@ class Tapper:
         self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
         self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
         self.proxy = self.config.get('proxy', None)
-        self.lock = fasteners.InterProcessLock(os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
+        self.lock = AsyncInterProcessLock(os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
         self.first_name = ''
         self.last_name = ''
         self.user_id = ''
@@ -65,8 +64,6 @@ class Tapper:
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
 
         self.headers = headers
-        self.headers['user-agent'] = self.check_user_agent()
-        self.headers.update(**get_sec_ch_ua(self.headers.get('user-agent', '')))
 
         self._webview_data = None
 
@@ -78,14 +75,15 @@ class Tapper:
     def log_message(self, message) -> str:
         return f"<light-yellow>{self.session_name}</light-yellow> | {message}"
 
-    def check_user_agent(self):
+    async def check_user_agent(self):
         user_agent = self.config.get('user_agent')
         if not user_agent:
             user_agent = generate_random_user_agent()
             self.config['user_agent'] = user_agent
-            config_utils.update_session_config_in_file(self.session_name, self.config, CONFIG_PATH)
+            await config_utils.update_session_config_in_file(self.session_name, self.config, CONFIG_PATH)
 
-        return user_agent
+        self.headers['User-Agent'] = user_agent
+        self.headers.update(**get_sec_ch_ua(user_agent))
 
     async def initialize_webview_data(self):
         if not self._webview_data:
@@ -108,7 +106,7 @@ class Tapper:
 
     async def get_tg_web_data(self) -> str:
         tg_web_data = None
-        with self.lock:
+        async with self.lock:
             try:
                 if not self.tg_client.is_connected():
                     await self.tg_client.connect()
@@ -136,7 +134,7 @@ class Tapper:
             finally:
                 if self.tg_client.is_connected():
                     await self.tg_client.disconnect()
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(15)
 
         return tg_web_data
 
@@ -441,6 +439,7 @@ class Tapper:
         self.worm_in_inv = self.worm_in_inv_copy
 
     async def run(self) -> None:
+        await self.check_user_agent()
         random_delay = random.randint(1, settings.RANDOM_SESSION_START_DELAY)
         logger.info(self.log_message(f"Bot will start in <light-red>{random_delay}s</light-red>"))
         await asyncio.sleep(delay=random_delay)
