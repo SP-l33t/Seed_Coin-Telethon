@@ -16,7 +16,6 @@ from telethon.errors import *
 from telethon.types import InputBotAppShortName, InputUser
 from telethon.functions import messages
 
-from .agents import generate_random_user_agent
 from bot.config import settings
 from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
 from bot.exceptions import InvalidSession
@@ -83,7 +82,7 @@ class Tapper:
         self._webview_data = None
 
     def log_message(self, message) -> str:
-        return f"<light-yellow>{self.session_name}</light-yellow> | {message}"
+        return f"<ly>{self.session_name}</ly> | {message}"
 
     async def initialize_webview_data(self):
         if not self._webview_data:
