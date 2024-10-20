@@ -23,7 +23,6 @@ headerjs = {
 }
 
 
-
 def get_main_js_format(base_url):
     try:
         response = requests.get(base_url, headers=headers)
@@ -38,6 +37,7 @@ def get_main_js_format(base_url):
     except requests.RequestException as e:
         logger.warning(f"Error fetching the base URL: {e}")
         return None
+
 
 def get_base_api(url):
     try:

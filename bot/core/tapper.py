@@ -1,25 +1,26 @@
 import aiohttp
 import asyncio
-import os
+import json
 import pytz
-import random
 import time
-from urllib.parse import unquote
+import sys
+from urllib.parse import unquote, parse_qs
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from datetime import datetime, timezone
 from better_proxy import Proxy
+from random import uniform, randint
 from time import time
 
-from opentele.tl import TelegramClient
-from telethon.errors import *
-from telethon.types import InputBotAppShortName, InputUser
-from telethon.functions import messages
+from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
-from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
+from bot.utils import logger, log_error, config_utils, CONFIG_PATH, first_run
+from bot.utils.ps import check_base_url
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
+
+api_endpoint = "https://elb.seeddao.org/"
 
 # api endpoint
 api_claim = f'{api_endpoint}api/v1/seed/claim'
@@ -41,12 +42,9 @@ new_user_api = f'{api_endpoint}api/v1/profile2'
 
 
 class Tapper:
-    def __init__(self, tg_client: TelegramClient):
+    def __init__(self, tg_client: UniversalTelegramClient):
         self.tg_client = tg_client
-        self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
-        self.lock = AsyncInterProcessLock(
-            os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
-        self.headers = headers
+        self.session_name = tg_client.session_name
 
         session_config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
 
@@ -54,6 +52,7 @@ class Tapper:
             logger.critical(self.log_message('CHECK accounts_config.json as it might be corrupted'))
             exit(-1)
 
+        self.headers = headers
         user_agent = session_config.get('user_agent')
         self.headers['user-agent'] = user_agent
         self.headers.update(**get_sec_ch_ua(user_agent))
@@ -61,11 +60,8 @@ class Tapper:
         self.proxy = session_config.get('proxy')
         if self.proxy:
             proxy = Proxy.from_str(self.proxy)
-            proxy_dict = proxy_utils.to_telethon_proxy(proxy)
-            self.tg_client.set_proxy(proxy_dict)
+            self.tg_client.set_proxy(proxy)
 
-        self.first_name = ''
-        self.last_name = ''
         self.user_id = ''
         self.Total_Point_Earned = 0
         self.Total_Game_Played = 0
@@ -76,69 +72,21 @@ class Tapper:
                          "legendary": 5}
         self.total_earned_from_sale = 0
         self.total_on_sale = 0
-        # TODO
-        self.my_ref = "6493211155"
         self.worm_in_inv = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
+
+        self.user_data = None
 
         self._webview_data = None
 
     def log_message(self, message) -> str:
         return f"<ly>{self.session_name}</ly> | {message}"
 
-    async def initialize_webview_data(self):
-        if not self._webview_data:
-            while True:
-                try:
-                    peer = await self.tg_client.get_input_entity('seed_coin_bot')
-                    bot_id = InputUser(user_id=peer.user_id, access_hash=peer.access_hash)
-                    input_bot_app = InputBotAppShortName(bot_id=bot_id, short_name="app")
-                    self._webview_data = {'peer': peer, 'app': input_bot_app}
-                    break
-                except FloodWaitError as fl:
-                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
-                    await asyncio.sleep(fl.seconds + 3)
-                except (UnauthorizedError, AuthKeyUnregisteredError):
-                    raise InvalidSession(f"{self.session_name}: User is unauthorized")
-                except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
-                    raise InvalidSession(f"{self.session_name}: User is banned")
-
     async def get_tg_web_data(self) -> str:
-        if self.proxy and not self.tg_client._proxy:
-            logger.critical(self.log_message('Proxy found, but not passed to TelegramClient'))
-            exit(-1)
+        webview_url = await self.tg_client.get_app_webview_url('seed_coin_bot', "app", "525256526")
 
-        tg_web_data = None
-        async with self.lock:
-            try:
-                if not self.tg_client.is_connected():
-                    await self.tg_client.connect()
-                await self.initialize_webview_data()
-                await asyncio.sleep(random.uniform(1, 2))
-
-                ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "525256526"
-
-                web_view = await self.tg_client(messages.RequestAppWebViewRequest(
-                    **self._webview_data,
-                    platform='android',
-                    write_allowed=True,
-                    start_param=ref_id
-                ))
-
-                auth_url = web_view.url
-                tg_web_data = unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
-
-            except InvalidSession:
-                raise
-
-            except Exception as error:
-                log_error(self.log_message(f"Unknown error during Authorization: {type(error).__name__}"))
-                await asyncio.sleep(delay=3)
-
-            finally:
-                if self.tg_client.is_connected():
-                    await self.tg_client.disconnect()
-                    await asyncio.sleep(15)
+        tg_web_data = unquote(string=webview_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
+        self.user_data = json.loads(parse_qs(tg_web_data).get('user', [''])[0])
 
         return tg_web_data
 
@@ -381,7 +329,7 @@ class Tapper:
                 worms.append(worm)
                 if worm['on_market'] is False:
                     self.worm_in_inv[worm['type']] += 1
-            await asyncio.sleep(random.uniform(1, 2))
+            await asyncio.sleep(uniform(1, 2))
         return worms
 
     async def sell_worm(self, worm_id, price, worm_type, http_client: aiohttp.ClientSession):
@@ -531,13 +479,9 @@ class Tapper:
         for piece in egg_pieces:
             egg_type[piece['type']] += 1
 
-        info_ = f"""
-        Common pieces: <cyan>{egg_type['common']}</cyan>
-        Uncommon pieces: <cyan>{egg_type['uncommon']}</cyan>
-        rare pieces: <cyan>{egg_type['rare']}</cyan>
-        epic pieces: <cyan>{egg_type['epic']}</cyan>
-        legendary pieces: <cyan>{egg_type['legendary']}</cyan>
-        """
+        info_ = f"Common: <lc>{egg_type['common']}</lc> | Uncommon: <lc>{egg_type['uncommon']}</lc> | " \
+                f"Rare: <lc>{egg_type['rare']}</lc> | Epic: <lc>{egg_type['epic']}</lc> | " \
+                f"Legendary: <lc>{egg_type['legendary']}</lc>"
 
         logger.info(f"{self.session_name} Egg pieces: \n{info_}")
 
@@ -645,7 +589,7 @@ class Tapper:
                     await self.fusion(pl_data, 'legendary', http_client)
 
     async def run(self) -> None:
-        random_delay = random.uniform(1, settings.RANDOM_SESSION_START_DELAY)
+        random_delay = uniform(1, settings.RANDOM_SESSION_START_DELAY)
         logger.info(self.log_message(f"Bot will start in <light-red>{int(random_delay)}s</light-red>"))
         await asyncio.sleep(delay=random_delay)
 
@@ -660,7 +604,7 @@ class Tapper:
                     await asyncio.sleep(300)
                     continue
 
-                token_live_time = random.randint(3500, 3600)
+                token_live_time = randint(3500, 3600)
                 try:
                     if time() - access_token_created_time >= token_live_time or not tg_web_data:
                         if check_base_url() is False:
@@ -676,13 +620,16 @@ class Tapper:
                         access_token_created_time = time()
 
                         http_client.headers["telegram-data"] = tg_web_data
-                        await asyncio.sleep(delay=random.randint(10, 15))
+                        await asyncio.sleep(delay=randint(10, 15))
 
                     not_new_user = await self.check_new_user(http_client)
 
                     if not_new_user is False:
                         logger.info(self.log_message(f"Setting up new account..."))
                         await self.setup_profile(http_client)
+
+                    if self.tg_client.is_fist_run:
+                        await first_run.append_recurring_session(self.session_name)
 
                     await self.fetch_profile(http_client)
 
@@ -813,19 +760,19 @@ class Tapper:
                         await asyncio.sleep(randint(1, 4))
                         await self.play_game(http_client)
 
-                    delay_time = random.randint(2800, 3600)
+                    delay_time = randint(2800, 3600)
                     logger.info(self.log_message(f"Completed {self.session_name}, waiting {delay_time} seconds..."))
                     await asyncio.sleep(delay=delay_time)
                 except InvalidSession as error:
                     raise error
 
                 except Exception as error:
-                    sleep_time = random.randint(60, 120)
+                    sleep_time = randint(60, 120)
                     log_error(self.log_message(f"Unknown error: {error}. Sleep {sleep_time} seconds"))
                     await asyncio.sleep(delay=sleep_time)
 
 
-async def run_tapper(tg_client: TelegramClient):
+async def run_tapper(tg_client: UniversalTelegramClient):
     runner = Tapper(tg_client=tg_client)
     try:
         await runner.run()

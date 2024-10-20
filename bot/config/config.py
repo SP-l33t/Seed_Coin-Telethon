@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     API_HASH: str
     GLOBAL_CONFIG_PATH: str = "TG_FARM"
 
+    FIX_CERT: bool = False
+
     REF_ID: str = "525256526"
 
     AUTO_UPGRADE_STORAGE: bool = True

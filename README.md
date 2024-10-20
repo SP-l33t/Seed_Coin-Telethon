@@ -7,50 +7,56 @@
 # 🔥🔥 Use PYTHON 3.10 🔥🔥
 
 ## Features  
-| Feature                       | Supported |
-|-------------------------------|:---------:|
-| Multithreading                |     ✅     |
-| Proxy binding to session      |     ✅     |
-| Auto-farming                  |     ✅     |
-| Auto-tasks                    |     ✅     |
-| Auto-upgrade                  |     ✅     |
-| Auto-check-in                 |     ✅     |
-| Auto-hunt                     |     ✅     |
-| Auto-spin                                                 |     ✅     |
-| Auto-fusion                                                 |     ✅     |
-| Auto-sell worms               |     ✅     |
-| Support for telethon .session |     ✅     |
+|                 Feature                 | Supported |
+|:---------------------------------------:|:---------:|
+|             Multithreading              |     ✅     |
+|        Proxy binding to session         |     ✅     |
+|              Auto-farming               |     ✅     |
+|               Auto-tasks                |     ✅     |
+|              Auto-upgrade               |     ✅     |
+|              Auto-check-in              |     ✅     |
+|                Auto-hunt                |     ✅     |
+|                Auto-spin                |     ✅     |
+|               Auto-fusion               |     ✅     |
+|             Auto-sell worms             |     ✅     |
+| Supports telethon AND pyrogram .session |     ✅     |
+
+_Script searches for session files in the following folders:_
+* /sessions
+* /sessions/pyrogram
+* /session/telethon
 
 
 ## [Settings](https://github.com/SP-l33t/Seed_Coin-Telethon/tree/main/.env-example)
 
 # Use default setting for best performance !
-| Settings                       |                                                                                                                  Description                                                                                                                  |
-|--------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| **API_ID / API_HASH**          |                                                                                  Platform data from which to run the Telegram session (by default - android)                                                                                  |
-| **GLOBAL_CONFIG_PATH**         | Specifies the global path for accounts_config, proxies, sessions. <br/>Specify an absolute path or use an environment variable (default environment variable: **TG_FARM**) <br/>If no environment variable exists, uses the script directory. |
-| **AUTO_UPGRADE_STORAGE**       |                                                                                                   Auto upgrade storage  (by default - True)                                                                                                   |
-| **AUTO_UPGRADE_MINING**        |                                                                                                 Auto upgrade mining speed (by default - True)                                                                                                 |
-| **AUTO_UPGRADE_HOLY**          |                                                                                                     Auto upgrade holy (by default - True)                                                                                                     |
-| **AUTO_TASK**                  |                                                                                                          Auto tasks (default - True)                                                                                                          |
-| **AUTO_SPIN**     |                    Auto spin (default - True)                         |
-| **SPIN_PER_ROUND**     |                    Spin count each round (default - [5, 10])                         |
-| **AUTO_FUSION**     |                    Auto fusion eggs if possible (default - True)                         |
-| **MAXIMUM_PRICE_TO_FUSION_COMMON**  |                    Max price to fusion common egg (default - 30)                         |
-| **MAXIMUM_PRICE_TO_FUSION_UNCOMMON**  |                    Max price to fusion uncommon egg (default - 200)                         |
-| **MAXIMUM_PRICE_TO_FUSION_RARE**     |                    Max price to fusion rare egg (default - 800)                         |
-| **MAXIMUM_PRICE_TO_FUSION_EPIC**     |                    Max price to fusion epic egg (default - 3000)                         |
-| **MAXIMUM_PRICE_TO_FUSION_LEGENDARY**     |                    Max price to fusion legendary egg (default - 20000)                         |
-| **AUTO_START_HUNT**            |                                                                                                       Auto start hunt (default - True)                                                                                                        |
-| **AUTO_SELL_WORMS**            |                                                                                                       Auto sell worms (default - True)                                                                                                        |
-| **QUANTITY_TO_KEEP**           |                                                       Quantity to keep worms check instruction [here](https://github.com/SP-l33t/Seed-App-Mine-Seed-BOT-Telegram/blob/main/setting.md)                                                        |
-| **REF_ID**                     |                                                                                              Your referral id after startapp= (Your telegram ID)                                                                                              |
-| **RANDOM_SESSION_START_DELAY** |                                                                                        Random delay at session start from 1 to set value (e.g. **30**)                                                                                        |
-| **SESSIONS_PER_PROXY**         |                                                                                            Amount of sessions, that can share same proxy ( **1** )                                                                                            |
-| **USE_PROXY_FROM_FILE**        |                                                                                Whether to use a proxy from the bot/config/proxies.txt file (**True** / False)                                                                                 |
-| **DISABLE_PROXY_REPLACE**      |                                                                      Disable automatic checking and replacement of non-working proxies before startup (True / **False**)                                                                      |
-| **DEVICE_PARAMS**              |                                                                          Enter device settings to make the telegram session look more realistic  (True / **False**)                                                                           |
-| **DEBUG_LOGGING**              |                                                                                     Whether to log error's tracebacks to /logs folder (True / **False**)                                                                                      |
+|               Settings                |                                                                                                                  Description                                                                                                                  |
+|:-------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|         **API_ID / API_HASH**         |                                                                                  Platform data from which to run the Telegram session (by default - android)                                                                                  |
+|        **GLOBAL_CONFIG_PATH**         | Specifies the global path for accounts_config, proxies, sessions. <br/>Specify an absolute path or use an environment variable (default environment variable: **TG_FARM**) <br/>If no environment variable exists, uses the script directory. |
+|             **FIX_CERT**              |                                                                                           Try to fix  SSLCertVerificationError ( True / **False** )                                                                                           |
+|       **AUTO_UPGRADE_STORAGE**        |                                                                                                   Auto upgrade storage  (by default - True)                                                                                                   |
+|        **AUTO_UPGRADE_MINING**        |                                                                                                 Auto upgrade mining speed (by default - True)                                                                                                 |
+|         **AUTO_UPGRADE_HOLY**         |                                                                                                     Auto upgrade holy (by default - True)                                                                                                     |
+|             **AUTO_TASK**             |                                                                                                          Auto tasks (default - True)                                                                                                          |
+|             **AUTO_SPIN**             |                                                                                                          Auto spin (default - True)                                                                                                           |
+|          **SPIN_PER_ROUND**           |                                                                                                   Spin count each round (default - [5, 10])                                                                                                   |
+|            **AUTO_FUSION**            |                                                                                                 Auto fusion eggs if possible (default - True)                                                                                                 |
+|  **MAXIMUM_PRICE_TO_FUSION_COMMON**   |                                                                                                 Max price to fusion common egg (default - 30)                                                                                                 |
+| **MAXIMUM_PRICE_TO_FUSION_UNCOMMON**  |                                                                                               Max price to fusion uncommon egg (default - 200)                                                                                                |
+|   **MAXIMUM_PRICE_TO_FUSION_RARE**    |                                                                                                 Max price to fusion rare egg (default - 800)                                                                                                  |
+|   **MAXIMUM_PRICE_TO_FUSION_EPIC**    |                                                                                                 Max price to fusion epic egg (default - 3000)                                                                                                 |
+| **MAXIMUM_PRICE_TO_FUSION_LEGENDARY** |                                                                                              Max price to fusion legendary egg (default - 20000)                                                                                              |
+|          **AUTO_START_HUNT**          |                                                                                                       Auto start hunt (default - True)                                                                                                        |
+|          **AUTO_SELL_WORMS**          |                                                                                                       Auto sell worms (default - True)                                                                                                        |
+|         **QUANTITY_TO_KEEP**          |                                                       Quantity to keep worms check instruction [here](https://github.com/SP-l33t/Seed-App-Mine-Seed-BOT-Telegram/blob/main/setting.md)                                                        |
+|              **REF_ID**               |                                                                                              Your referral id after startapp= (Your telegram ID)                                                                                              |
+|    **RANDOM_SESSION_START_DELAY**     |                                                                                        Random delay at session start from 1 to set value (e.g. **30**)                                                                                        |
+|        **SESSIONS_PER_PROXY**         |                                                                                            Amount of sessions, that can share same proxy ( **1** )                                                                                            |
+|        **USE_PROXY_FROM_FILE**        |                                                                                Whether to use a proxy from the bot/config/proxies.txt file (**True** / False)                                                                                 |
+|       **DISABLE_PROXY_REPLACE**       |                                                                      Disable automatic checking and replacement of non-working proxies before startup (True / **False**)                                                                      |
+|           **DEVICE_PARAMS**           |                                                                          Enter device settings to make the telegram session look more realistic  (True / **False**)                                                                           |
+|           **DEBUG_LOGGING**           |                                                                                     Whether to log error's tracebacks to /logs folder (True / **False**)                                                                                      |
 
 ## Quick Start 📚
 
