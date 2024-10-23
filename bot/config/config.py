@@ -51,6 +51,8 @@ class Settings(BaseSettings):
         }
     }
 
+    ADVANCED_ANTI_DETECTION: bool = True
+
     RANDOM_SESSION_START_DELAY: int = 30
 
     SESSIONS_PER_PROXY: int = 1

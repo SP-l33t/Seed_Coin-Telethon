@@ -334,7 +334,7 @@ class Tapper:
 
     async def sell_worm(self, worm_id, price, worm_type, http_client: aiohttp.ClientSession):
         payload = {
-            "price": price,
+            "price": int(price),
             "worm_id": worm_id
         }
         response = await http_client.post(api_sell, json=payload)
@@ -606,10 +606,14 @@ class Tapper:
 
                 token_live_time = randint(3500, 3600)
                 try:
-                    if time() - access_token_created_time >= token_live_time or not tg_web_data:
-                        if check_base_url() is False:
+                    if check_base_url() is False:
+                        if settings.ADVANCED_ANTI_DETECTION:
                             sys.exit(
-                                "Detected api change! Stoped the bot for safety. Contact me here to update the bot: https://t.me/vanhbakaaa")
+                                "Detected index js file change. Contact me to check if it's safe to continue: https://t.me/vanhbakaaa")
+                        else:
+                            sys.exit(
+                                "Detected api change! Stopped the bot for safety. Contact me here to update the bot: https://t.me/vanhbakaaa")
+                    if time() - access_token_created_time >= token_live_time or not tg_web_data:
                         tg_web_data = await self.get_tg_web_data()
 
                         if not tg_web_data:
