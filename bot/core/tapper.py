@@ -116,7 +116,7 @@ class Tapper:
         payload = {
             "egg_id": egg_id
         }
-        res = await http_client.post('https://elb.seeddao.org/api/v1/egg-hatch/complete', json=payload)
+        res = await http_client.post(f'{api_endpoint}api/v1/egg-hatch/complete', json=payload)
         if res.status == 200:
             json_data = await res.json()
             logger.success(self.log_message(f"<cyan>Sucessfully hatched {json_data['data']['type']}!</cyan>"))
@@ -189,7 +189,7 @@ class Tapper:
                 logger.info(self.log_message(f"Failed | {checkin_data}"))
 
     async def fetch_worm_status(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get('https://elb.seeddao.org/api/v1/worms')
+        response = await http_client.get(f'{api_endpoint}api/v1/worms')
         if response.status == 200:
             worm_info = await response.json()
             next_refresh = worm_info['data'].get('next_worm')
@@ -212,7 +212,7 @@ class Tapper:
     async def capture_worm(self, http_client: aiohttp.ClientSession):
         worm_info = await self.fetch_worm_status(http_client)
         if worm_info and not worm_info.get('is_caught', True):
-            response = await http_client.post('https://elb.seeddao.org/api/v1/worms/catch')
+            response = await http_client.post(f'{api_endpoint}api/v1/worms/catch')
             if response.status == 200:
                 logger.success(self.log_message(f"<green>Worm Captured Successfully</green>"))
             elif response.status == 400:
