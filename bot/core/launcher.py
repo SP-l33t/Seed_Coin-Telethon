@@ -8,7 +8,7 @@ from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
 from bot.core.agents import generate_random_user_agent
-from bot.utils import logger, config_utils, proxy_utils, CONFIG_PATH, SESSIONS_PATH, PROXIES_PATH
+from bot.utils import logger, config_utils, proxy_utils, CONFIG_PATH, SESSIONS_PATH, PROXIES_PATH, ps
 from bot.core.tapper import run_tapper
 from bot.core.registrator import register_sessions
 
@@ -156,5 +156,7 @@ async def run_tasks():
     await config_utils.restructure_config(CONFIG_PATH)
     await init_config_file()
     tg_clients = await get_tg_clients()
+    await ps.check_base_url()
     tasks = [asyncio.create_task(run_tapper(tg_client=tg_client)) for tg_client in tg_clients]
+    tasks.append(asyncio.create_task(ps.check_bot_update_loop(2000)))
     await asyncio.gather(*tasks)

@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     FIX_CERT: bool = False
 
+    TRACK_BOT_UPDATES: bool = True
+
     REF_ID: str = "525256526"
 
     AUTO_UPGRADE_STORAGE: bool = True
@@ -51,9 +53,7 @@ class Settings(BaseSettings):
         }
     }
 
-    ADVANCED_ANTI_DETECTION: bool = True
-
-    RANDOM_SESSION_START_DELAY: int = 30
+    RANDOM_SESSION_START_DELAY: int = 360
 
     SESSIONS_PER_PROXY: int = 1
     USE_PROXY_FROM_FILE: bool = True
