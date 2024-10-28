@@ -70,6 +70,6 @@ async def check_base_url():
 async def check_bot_update_loop(start_delay: 0):
     await asyncio.sleep(start_delay)
     while settings.TRACK_BOT_UPDATES:
-        if not(check_base_url()):
+        if not(await check_base_url()):
             sys.exit("Detected Bot updates. Contact me to check if it's safe to continue: https://t.me/SP_l33t")
         await asyncio.sleep(uniform(1500, 2000))
