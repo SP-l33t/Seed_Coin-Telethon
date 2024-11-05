@@ -3,20 +3,18 @@ import asyncio
 import json
 import pytz
 import time
-import sys
 from urllib.parse import unquote, parse_qs
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from datetime import datetime, timezone
 from better_proxy import Proxy
-from random import uniform, randint
+from random import uniform, randint, shuffle
 from time import time
 
 from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
 from bot.utils import logger, log_error, config_utils, CONFIG_PATH, first_run
-from bot.utils.build_check import check_base_url
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -235,12 +233,17 @@ class Tapper:
 
     async def fetch_tasks(self, http_client: aiohttp.ClientSession):
         response = await http_client.get(f'{api_endpoint}api/v1/tasks/progresses')
-        tasks = await response.json()
+        if 'json' in response.content_type:
+            tasks = await response.json()
+        else:
+            return
+        shuffle(tasks)
         for task in tasks['data']:
             if task['task_user'] is None:
                 await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
             elif task['task_user']['completed'] is False:
                 await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
+            await asyncio.sleep(uniform(3, 7))
 
     async def mark_task_complete(self, task_id, task_name, type, http_client: aiohttp.ClientSession):
         if type == "academy":
@@ -251,10 +254,9 @@ class Tapper:
             }
             response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}', json=payload)
             if response.status == 200:
-                logger.success(f"{self.session_name} | <green>Task {task_name} marked complete.</green>")
+                logger.success(self.log_message(f"Task <lg>{task_name}</lg> marked complete."))
             else:
-                logger.error(
-                    f"{self.session_name} | Failed to complete task {task_name}, status code: {response.status}")
+                logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
         else:
             response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}')
             if response.status == 200:
