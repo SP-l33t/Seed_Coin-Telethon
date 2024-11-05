@@ -20,7 +20,7 @@ from bot.utils.build_check import check_base_url
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
-api_endpoint = "https://elb.seeddao.org/"
+api_endpoint = "https://alb.seeddao.org/"
 
 # api endpoint
 api_claim = f'{api_endpoint}api/v1/seed/claim'
@@ -74,6 +74,15 @@ class Tapper:
         self.total_on_sale = 0
         self.worm_in_inv = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
+        self.academy_ans = {
+            "What is TON?": "Ton",
+            "Coin vs Token": "Tokens",
+            "What is Airdrop?": "Airdrop",
+            "Hot vs Cold Wallet": "Wallet",
+            "Crypto vs Blockchain": "Cryptocurrency",
+            "Learn Blockchain in 3 mins": "Blockchain",
+            "News affecting the BTC price": "BTCTOTHEMOON"
+        }
 
         self.user_data = None
 
@@ -122,7 +131,7 @@ class Tapper:
             logger.success(self.log_message(f"<cyan>Sucessfully hatched {json_data['data']['type']}!</cyan>"))
 
     async def get_first_egg_and_hatch(self, http_client: aiohttp.ClientSession):
-        res = await http_client.post('https://elb.seeddao.org/api/v1/give-first-egg')
+        res = await http_client.post(f'{api_endpoint}api/v1/give-first-egg')
         if res.status == 200:
             logger.success(self.log_message(f"Successfully <green>got first egg!</green>"))
             json_egg = await res.json()
@@ -229,16 +238,29 @@ class Tapper:
         tasks = await response.json()
         for task in tasks['data']:
             if task['task_user'] is None:
-                await self.mark_task_complete(task['id'], task['name'], http_client)
+                await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
             elif task['task_user']['completed'] is False:
-                await self.mark_task_complete(task['id'], task['name'], http_client)
+                await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
 
-    async def mark_task_complete(self, task_id, task_name, http_client: aiohttp.ClientSession):
-        response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}')
-        if response.status == 200:
-            logger.success(self.log_message(f"Task <green>{task_name}</green> marked complete."))
+    async def mark_task_complete(self, task_id, task_name, type, http_client: aiohttp.ClientSession):
+        if type == "academy":
+            if task_name not in list(self.academy_ans.keys()):
+                return
+            payload = {
+                "answer": self.academy_ans[task_name]
+            }
+            response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}', json=payload)
+            if response.status == 200:
+                logger.success(f"{self.session_name} | <green>Task {task_name} marked complete.</green>")
+            else:
+                logger.error(
+                    f"{self.session_name} | Failed to complete task {task_name}, status code: {response.status}")
         else:
-            logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
+            response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}')
+            if response.status == 200:
+                logger.success(self.log_message(f"Task <green>{task_name}</green> marked complete."))
+            else:
+                logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
 
     async def claim_hunt_reward(self, bird_id, http_client: aiohttp.ClientSession):
         payload = {
