@@ -55,21 +55,14 @@ async def check_base_url():
             if js_ver in js:
                 logger.success(f"No change in js file: <green>{js_ver}</green>")
                 return True
-        return False
+        sys.exit("Detected Bot updates. Contact me to check if it's safe to continue: https://t.me/SP_l33t")
     else:
-        logger.info("Could not find any main.js format. Dumping page content for inspection:")
-        try:
-            async with aiohttp.request(url=appUrl, method="GET", headers=headers) as response:
-                print((await response.text())[:1000])  # Print first 1000 characters of the page
-                return False
-        except Exception as e:
-            logger.warning(f"Error fetching the base URL for content dump: {e}")
-            return False
+        logger.error("<lr>No main js file found. Can't continue</lr>")
+        sys.exit("No main js file found. Contact me to check if it's safe to continue: https://t.me/SP_l33t")
 
 
 async def check_bot_update_loop(start_delay: 0):
     await asyncio.sleep(start_delay)
     while settings.TRACK_BOT_UPDATES:
-        if not(await check_base_url()):
-            sys.exit("Detected Bot updates. Contact me to check if it's safe to continue: https://t.me/SP_l33t")
+        await check_base_url()
         await asyncio.sleep(uniform(1500, 2000))

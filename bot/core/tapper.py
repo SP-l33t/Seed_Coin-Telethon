@@ -16,7 +16,7 @@ from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
 from bot.utils import logger, log_error, config_utils, CONFIG_PATH, first_run
-from bot.utils.ps import check_base_url
+from bot.utils.build_check import check_base_url
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -503,7 +503,6 @@ class Tapper:
             await asyncio.sleep(randint(2,5))
 
         if settings.AUTO_FUSION:
-            # print("stary")
             egg_type = {
                 "common": 0,
                 "uncommon": 0,
