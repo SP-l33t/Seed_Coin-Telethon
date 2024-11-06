@@ -79,7 +79,8 @@ class Tapper:
             "Hot vs Cold Wallet": "Wallet",
             "Crypto vs Blockchain": "Cryptocurrency",
             "Learn Blockchain in 3 mins": "Blockchain",
-            "News affecting the BTC price": "BTCTOTHEMOON"
+            "News affecting the BTC price": "BTCTOTHEMOON",
+            "On-chain vs Off-chain #8": "TRANSACTION"
         }
 
         self.user_data = None

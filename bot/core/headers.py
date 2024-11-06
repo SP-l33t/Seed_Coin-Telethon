@@ -11,6 +11,7 @@ headers = {
     'sec-ch-ua-platform': '"Android"',
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
+    'x-requested-with': "org.telegram.messenger",
     'sec-fetch-site': 'same-site',
     'telegram-data': 'tokens',
 }
