@@ -80,7 +80,8 @@ class Tapper:
             "Crypto vs Blockchain": "Cryptocurrency",
             "Learn Blockchain in 3 mins": "Blockchain",
             "News affecting the BTC price": "BTCTOTHEMOON",
-            "On-chain vs Off-chain #8": "TRANSACTION"
+            "On-chain vs Off-chain #8": "TRANSACTION",
+            "#10 Bullish and Bearish": "BULLRUN"
         }
 
         self.user_data = None
