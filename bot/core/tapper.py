@@ -74,7 +74,7 @@ class Tapper:
         self.worm_in_inv = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
 
-        self.user_data = None
+        self.user_data = {}
 
         self._webview_data = None
 
@@ -499,7 +499,9 @@ class Tapper:
 
     async def transfer_egg(self, http_client: CloudflareScraper, egg_id, max_fee):
         balance = await self.get_balance(http_client)
-        if not settings.TRANSFER_EGGS or balance < max_fee:
+        if settings.TRANSFER_EGGS == self.user_data.get('id'):
+            return 'self'
+        elif not settings.TRANSFER_EGGS or balance < max_fee:
             return False
         payload = {"telegram_id": settings.TRANSFER_EGGS, "egg_id": egg_id, "max_fee": max_fee}
         response = await http_client.post(f"{API_ENDPOINT}/transfer/egg", json=payload)
@@ -514,6 +516,8 @@ class Tapper:
                 await self.get_egg_info(http_client, egg.get('id'))
                 fee = await self.egg_transfer_fee(http_client, egg.get('type'))
                 egg_transfer = await self.transfer_egg(http_client, egg.get('id'), fee)
+                if egg_transfer == 'self':
+                    return
                 if egg_transfer:
                     logger.success(self.log_message(
                         f"Successfully transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
@@ -816,9 +820,9 @@ class Tapper:
                         await asyncio.sleep(randint(1, 4))
                         await self.play_game(http_client)
 
-                    delay_time = randint(2800, 3600)
-                    logger.info(self.log_message(f"Completed {self.session_name}, waiting {delay_time} seconds..."))
-                    await asyncio.sleep(delay=delay_time)
+                    delay_time = uniform(3500, 7200)
+                    logger.info(self.log_message(f"Completed cycle, waiting {int(delay_time)} seconds..."))
+                    await asyncio.sleep(delay_time)
                 except InvalidSession as error:
                     raise error
 
