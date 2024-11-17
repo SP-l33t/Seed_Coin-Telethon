@@ -18,25 +18,26 @@ from bot.utils import logger, log_error, config_utils, CONFIG_PATH, first_run
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
-api_endpoint = "https://alb.seeddao.org/"
-
-# api endpoint
-api_claim = f'{api_endpoint}api/v1/seed/claim'
-api_balance = f'{api_endpoint}api/v1/profile/balance'
-api_checkin = f'{api_endpoint}api/v1/login-bonuses'
-api_upgrade_storage = f'{api_endpoint}api/v1/seed/storage-size/upgrade'
-api_upgrade_mining = f'{api_endpoint}api/v1/seed/mining-speed/upgrade'
-api_upgrade_holy = f'{api_endpoint}api/v1/upgrades/holy-water'
-api_profile = f'{api_endpoint}api/v1/profile'
-api_hunt_completed = f'{api_endpoint}api/v1/bird-hunt/complete'
-api_bird_info = f'{api_endpoint}api/v1/bird/is-leader'
-api_make_happy = f'{api_endpoint}api/v1/bird-happiness'
-api_get_worm_data = f'{api_endpoint}api/v1/worms/me-all'
-api_feed = f'{api_endpoint}api/v1/bird-feed'
-api_start_hunt = f'{api_endpoint}api/v1/bird-hunt/start'
-api_inv = f'{api_endpoint}api/v1/worms/me'
-api_sell = f'{api_endpoint}api/v1/market-item/add'
-new_user_api = f'{api_endpoint}api/v1/profile2'
+API_ENDPOINT = "https://alb.seeddao.org/api/v1"
+# TODO Enable name task and refer
+SKIP_TASK_CATEGORIES = ["telegram-boost",
+                        "telegram-name-include",
+                        "refer",
+                        "collaboration",
+                        "mint-bird-nft",
+                        "ton-wallet-connect"]
+VIDEO_ANSWERS = {
+            "What is TON?": "Ton",
+            "Coin vs Token": "Tokens",
+            "What is Airdrop?": "Airdrop",
+            "Hot vs Cold Wallet": "Wallet",
+            "Crypto vs Blockchain": "Cryptocurrency",
+            "Learn Blockchain in 3 mins": "Blockchain",
+            "News affecting the BTC price": "BTCTOTHEMOON",
+            "On-chain vs Off-chain #8": "TRANSACTION",
+            "#10 Bullish and Bearish": "BULLRUN",
+            "#13 SEED NFT Introduction": "BIRDIE"
+        }
 
 
 class Tapper:
@@ -72,17 +73,6 @@ class Tapper:
         self.total_on_sale = 0
         self.worm_in_inv = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
         self.worm_in_inv_copy = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
-        self.academy_ans = {
-            "What is TON?": "Ton",
-            "Coin vs Token": "Tokens",
-            "What is Airdrop?": "Airdrop",
-            "Hot vs Cold Wallet": "Wallet",
-            "Crypto vs Blockchain": "Cryptocurrency",
-            "Learn Blockchain in 3 mins": "Blockchain",
-            "News affecting the BTC price": "BTCTOTHEMOON",
-            "On-chain vs Off-chain #8": "TRANSACTION",
-            "#10 Bullish and Bearish": "BULLRUN"
-        }
 
         self.user_data = None
 
@@ -99,7 +89,7 @@ class Tapper:
 
         return tg_web_data
 
-    async def check_proxy(self, http_client: aiohttp.ClientSession) -> bool:
+    async def check_proxy(self, http_client: CloudflareScraper) -> bool:
         proxy_conn = http_client.connector
         if proxy_conn and not hasattr(proxy_conn, '_proxy_host'):
             logger.info(self.log_message(f"Running Proxy-less"))
@@ -113,33 +103,33 @@ class Tapper:
             log_error(self.log_message(f"Proxy: {proxy_url} | Error: {type(error).__name__}"))
             return False
 
-    async def setup_profile(self, http_client: aiohttp.ClientSession) -> None:
-        response = await http_client.post(url=api_profile)
+    async def setup_profile(self, http_client: CloudflareScraper) -> None:
+        response = await http_client.post(url=f'{API_ENDPOINT}/profile')
         if response.status == 200:
             logger.info(self.log_message(f"<green>Set up account successfully!</green>"))
 
         else:
             logger.warning(self.log_message(f"Can't get account data <red>response status: {response.status}</red>"))
 
-    async def hatch_egg(self, http_client: aiohttp.ClientSession, egg_id):
+    async def hatch_egg(self, http_client: CloudflareScraper, egg_id):
         payload = {
             "egg_id": egg_id
         }
-        res = await http_client.post(f'{api_endpoint}api/v1/egg-hatch/complete', json=payload)
+        res = await http_client.post(f'{API_ENDPOINT}/egg-hatch/complete', json=payload)
         if res.status == 200:
             json_data = await res.json()
-            logger.success(self.log_message(f"<cyan>Sucessfully hatched {json_data['data']['type']}!</cyan>"))
+            logger.success(self.log_message(f"Successfully hatched <lc>{json_data['data']['type']}</lc>!"))
 
-    async def get_first_egg_and_hatch(self, http_client: aiohttp.ClientSession):
-        res = await http_client.post(f'{api_endpoint}api/v1/give-first-egg')
+    async def get_first_egg_and_hatch(self, http_client: CloudflareScraper):
+        res = await http_client.post(f'{API_ENDPOINT}/give-first-egg')
         if res.status == 200:
             logger.success(self.log_message(f"Successfully <green>got first egg!</green>"))
             json_egg = await res.json()
             egg_id = str(json_egg['data']['id'])
             await self.hatch_egg(http_client, egg_id)
 
-    async def fetch_profile(self, http_client: aiohttp.ClientSession) -> None:
-        response = await http_client.get(url=api_profile)
+    async def fetch_profile(self, http_client: CloudflareScraper) -> None:
+        response = await http_client.get(url=f'{API_ENDPOINT}/profile')
         if response.status == 200:
             response_json = await response.json()
             self.user_id = response_json['data']['id']
@@ -160,32 +150,32 @@ class Tapper:
         else:
             logger.warning(self.log_message(f"Can't get account data <red>response status: {response.status}</red>"))
 
-    async def upgrade_storage(self, http_client: aiohttp.ClientSession) -> None:
-        response = await http_client.post(url=api_upgrade_storage)
+    async def upgrade_storage(self, http_client: CloudflareScraper) -> None:
+        response = await http_client.post(url=f'{API_ENDPOINT}/seed/storage-size/upgrade')
         if response.status == 200:
             logger.success(self.log_message(f"<yellow>Upgrade Storage Successfully</yellow>"))
 
-    async def upgrade_mining(self, http_client: aiohttp.ClientSession) -> None:
-        response = await http_client.post(url=api_upgrade_mining)
+    async def upgrade_mining(self, http_client: CloudflareScraper) -> None:
+        response = await http_client.post(url=f'{API_ENDPOINT}/seed/mining-speed/upgrade')
         if response.status == 200:
             logger.success(self.log_message(f"<yellow>Upgrade Mining Successfully</yellow>"))
 
-    async def upgrade_holy(self, http_client: aiohttp.ClientSession) -> None:
-        response = await http_client.post(url=api_upgrade_holy)
+    async def upgrade_holy(self, http_client: CloudflareScraper) -> None:
+        response = await http_client.post(url=f'{API_ENDPOINT}/upgrades/holy-water')
         if response.status == 200:
             logger.success(self.log_message(f"<yellow>Upgrade Holy Successfully</yellow>"))
 
-    async def verify_balance(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(url=api_balance)
-        if response.status == 200:
+    async def get_balance(self, http_client: CloudflareScraper):
+        response = await http_client.get(url=f'{API_ENDPOINT}/profile/balance')
+        if response.status in range(200, 300) and 'json' in response.content_type:
             balance_info = await response.json()
-            logger.info(self.log_message(f"<cyan>Balance: {balance_info['data'] / 1000000000}</cyan>"))
-            return True
+            logger.info(self.log_message(f"Balance: <lc>{balance_info.get('data', 0) / 1000000000}</lc>"))
+            return balance_info.get('data', 0)
         else:
             logger.warning(self.log_message(f"<red>Balance: Error | {response.status}</red>"))
 
-    async def perform_daily_checkin(self, http_client: aiohttp.ClientSession):
-        response = await http_client.post(api_checkin)
+    async def perform_daily_checkin(self, http_client: CloudflareScraper):
+        response = await http_client.post(f'{API_ENDPOINT}/login-bonuses')
         if response.status == 200:
             checkin_data = await response.json()
             day = checkin_data.get('data', {}).get('no', '')
@@ -197,8 +187,8 @@ class Tapper:
             else:
                 logger.info(self.log_message(f"Failed | {checkin_data}"))
 
-    async def fetch_worm_status(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(f'{api_endpoint}api/v1/worms')
+    async def fetch_worm_status(self, http_client: CloudflareScraper):
+        response = await http_client.get(f'{API_ENDPOINT}/worms')
         if response.status == 200:
             worm_info = await response.json()
             next_refresh = worm_info['data'].get('next_worm')
@@ -218,10 +208,10 @@ class Tapper:
             logger.error(self.log_message(f"Error retrieving worm data."))
             return None
 
-    async def capture_worm(self, http_client: aiohttp.ClientSession):
+    async def capture_worm(self, http_client: CloudflareScraper):
         worm_info = await self.fetch_worm_status(http_client)
         if worm_info and not worm_info.get('is_caught', True):
-            response = await http_client.post(f'{api_endpoint}api/v1/worms/catch')
+            response = await http_client.post(f'{API_ENDPOINT}/worms/catch')
             if response.status == 200:
                 logger.success(self.log_message(f"<green>Worm Captured Successfully</green>"))
             elif response.status == 400:
@@ -233,44 +223,42 @@ class Tapper:
         else:
             logger.info(self.log_message(f"Worm unavailable or already captured."))
 
-    async def fetch_tasks(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(f'{api_endpoint}api/v1/tasks/progresses')
+    async def fetch_tasks(self, http_client: CloudflareScraper):
+        response = await http_client.get(f'{API_ENDPOINT}/tasks/progresses')
         if 'json' in response.content_type:
             tasks = await response.json()
         else:
             return
         shuffle(tasks)
         for task in tasks['data']:
-            if task['task_user'] is None:
+            if task.get('type', "") in SKIP_TASK_CATEGORIES:
+                continue
+            if not task['task_user'] or task['task_user']['completed'] is False:
                 await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
-            elif task['task_user']['completed'] is False:
-                await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
-            await asyncio.sleep(uniform(3, 7))
+                await asyncio.sleep(uniform(5, 10))
 
-    async def mark_task_complete(self, task_id, task_name, type, http_client: aiohttp.ClientSession):
+    async def mark_task_complete(self, task_id, task_name, type, http_client: CloudflareScraper):
         if type == "academy":
-            if task_name not in list(self.academy_ans.keys()):
+            if task_name not in VIDEO_ANSWERS:
                 return
-            payload = {
-                "answer": self.academy_ans[task_name]
-            }
-            response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}', json=payload)
+            payload = {"answer": VIDEO_ANSWERS[task_name]}
+            response = await http_client.post(f'{API_ENDPOINT}/tasks/{task_id}', json=payload)
             if response.status == 200:
                 logger.success(self.log_message(f"Task <lg>{task_name}</lg> marked complete."))
             else:
                 logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
         else:
-            response = await http_client.post(f'{api_endpoint}api/v1/tasks/{task_id}')
+            response = await http_client.post(f'{API_ENDPOINT}/tasks/{task_id}')
             if response.status == 200:
                 logger.success(self.log_message(f"Task <green>{task_name}</green> marked complete."))
             else:
                 logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
 
-    async def claim_hunt_reward(self, bird_id, http_client: aiohttp.ClientSession):
+    async def claim_hunt_reward(self, bird_id, http_client: CloudflareScraper):
         payload = {
             "bird_id": bird_id
         }
-        response = await http_client.post(api_hunt_completed, json=payload)
+        response = await http_client.post(f'{API_ENDPOINT}/bird-hunt/complete', json=payload)
         if response.status == 200:
             response_data = await response.json()
             logger.success(self.log_message(
@@ -280,8 +268,8 @@ class Tapper:
             response_data = await response.json()
             logger.error(self.log_message(f"Failed to claim hunt reward, status code: {response.status}. {response_data}"))
 
-    async def get_bird_info(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(api_bird_info)
+    async def get_bird_info(self, http_client: CloudflareScraper):
+        response = await http_client.get(f'{API_ENDPOINT}/bird/is-leader')
         if response.status == 200:
             response_data = await response.json()
             return response_data['data']
@@ -290,31 +278,33 @@ class Tapper:
             logger.info(self.log_message(f"Get bird data failed: {response_data}"))
             return None
 
-    async def make_bird_happy(self, bird_id, http_client: aiohttp.ClientSession):
+    async def make_bird_happy(self, bird_id, http_client: CloudflareScraper):
         payload = {
             "bird_id": bird_id,
             "happiness_rate": 10000
         }
-        response = await http_client.post(api_make_happy, json=payload)
+        response = await http_client.post(f'{API_ENDPOINT}/bird-happiness', json=payload)
         if response.status == 200:
             return True
         else:
             return False
 
-    async def get_worm_data(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(api_get_worm_data)
+    async def get_worm_data(self, http_client: CloudflareScraper):
+        response = await http_client.get(f'{API_ENDPOINT}/worms/me-all')
         if response.status == 200:
             response_data = await response.json()
             return response_data['data']
         else:
             return None
 
-    async def feed_bird(self, bird_id, worm_id, http_client: aiohttp.ClientSession):
+    async def feed_bird(self, http_client: CloudflareScraper, bird_id, worm_ids):
+        if not worm_ids:
+            return
         payload = {
             "bird_id": bird_id,
-            "worm_ids": worm_id
+            "worm_ids": worm_ids
         }
-        response = await http_client.post(api_feed, json=payload)
+        response = await http_client.post(f'{API_ENDPOINT}/bird-feed', json=payload)
         if response.status == 200:
             logger.success(self.log_message(f"<green>Feed bird</green> successfully"))
         else:
@@ -322,21 +312,21 @@ class Tapper:
             logger.info(self.log_message(f"Failed to feed bird, response code:{response.status}. {response_data}"))
             return None
 
-    async def start_hunt(self, bird_id, http_client: aiohttp.ClientSession):
+    async def start_hunt(self, bird_id, http_client: CloudflareScraper):
         payload = {
             "bird_id": bird_id,
             "task_level": 0
         }
-        response = await http_client.post(api_start_hunt, json=payload)
+        response = await http_client.post(f'{API_ENDPOINT}/bird-hunt/start', json=payload)
         if response.status == 200:
             logger.success(self.log_message(f"Successfully start <green>hunting</green>"))
         else:
             response_data = await response.json()
             logger.error(self.log_message(f"Start hunting failed..., response code: {response.status}. {response_data}"))
 
-    async def get_worms(self, http_client: aiohttp.ClientSession):
+    async def get_worms(self, http_client: CloudflareScraper):
         worms = []
-        first_page = await http_client.get(api_inv + "?page=1")
+        first_page = await http_client.get(f'{API_ENDPOINT}/worms/me' + "?page=1")
         json_page = await first_page.json()
 
         for worm in json_page['data']['items']:
@@ -348,7 +338,7 @@ class Tapper:
             count = 1
         total_page = int(float(json_page['data']['total'] / json_page['data']['page_size'])) + count
         for page in range(2, total_page + 1):
-            api_url = api_inv + f"?page={page}"
+            api_url = f'{API_ENDPOINT}/worms/me' + f"?page={page}"
             page_data = await http_client.get(api_url)
             json_page = await page_data.json()
             for worm in json_page['data']['items']:
@@ -358,12 +348,12 @@ class Tapper:
             await asyncio.sleep(uniform(1, 2))
         return worms
 
-    async def sell_worm(self, worm_id, price, worm_type, http_client: aiohttp.ClientSession):
+    async def sell_worm(self, worm_id, price, worm_type, http_client: CloudflareScraper):
         payload = {
             "price": int(price),
             "worm_id": worm_id
         }
-        response = await http_client.post(api_sell, json=payload)
+        response = await http_client.post(f'{API_ENDPOINT}/market-item/add', json=payload)
         if response.status == 200:
             self.total_on_sale += 1
             logger.success(self.log_message(
@@ -373,8 +363,8 @@ class Tapper:
             logger.info(self.log_message(f"Failed to sell {worm_type} worm, response code:{response.status}. {response_data}"))
             return None
 
-    async def get_price(self, worm_type, http_client: aiohttp.ClientSession):
-        api = f'{api_endpoint}v1/market/v2?market_type=worm&worm_type={worm_type}&sort_by_price=ASC&sort_by_updated_at=&page=1'
+    async def get_price(self, worm_type, http_client: CloudflareScraper):
+        api = f'{API_ENDPOINT}v1/market/v2?market_type=worm&worm_type={worm_type}&sort_by_price=ASC&sort_by_updated_at=&page=1'
         response = await http_client.get(api)
         if response.status == 200:
             json_r = await response.json()
@@ -382,8 +372,8 @@ class Tapper:
         else:
             return 0
 
-    async def get_sale_data(self, http_client: aiohttp.ClientSession):
-        api = f'{api_endpoint}api/v1/history-log-market/me?market_type=worm&page=1&history_type=sell'
+    async def get_sale_data(self, http_client: CloudflareScraper):
+        api = f'{API_ENDPOINT}/history-log-market/me?market_type=worm&page=1&history_type=sell'
         response = await http_client.get(api)
         json_data = await response.json()
         worm_on_sale = {"common": 0, "uncommon": 0, "rare": 0, "epic": 0, "legendary": 0}
@@ -398,7 +388,7 @@ class Tapper:
         total_page = int(float(json_data['data']['total'] / json_data['data']['page_size'])) + count
         for page in range(2, total_page + 1):
             response = await http_client.get(
-                f"{api_endpoint}api/v1/history-log-market/me?market_type=worm&page={page}&history_type=sell")
+                f"{API_ENDPOINT}/history-log-market/me?market_type=worm&page={page}&history_type=sell")
             json_data = await response.json()
             for worm in json_data['data']['items']:
                 if worm['status'] == "on-sale":
@@ -408,8 +398,8 @@ class Tapper:
 
         return worm_on_sale
 
-    async def check_new_user(self, http_client: aiohttp.ClientSession):
-        response = await http_client.get(new_user_api)
+    async def check_new_user(self, http_client: CloudflareScraper):
+        response = await http_client.get(f'{API_ENDPOINT}/profile2')
         if response.status == 200:
             data_ = await response.json()
             return data_['data']['bonus_claimed']
@@ -418,8 +408,8 @@ class Tapper:
         self.total_earned_from_sale = 0
         self.worm_in_inv = self.worm_in_inv_copy
 
-    async def get_streak_rewards(self, http_client: aiohttp.ClientSession):
-        res = await http_client.get(f"{api_endpoint}api/v1/streak-reward")
+    async def get_streak_rewards(self, http_client: CloudflareScraper):
+        res = await http_client.get(f"{API_ENDPOINT}/streak-reward")
         if res.status == 200:
             data_ = await res.json()
             return data_['data']
@@ -427,13 +417,13 @@ class Tapper:
             logger.warning(f"{self.session_name} | <yellow>Failed to get streak rewards</yellow>")
         return None
 
-    async def claim_streak_rewards(self, http_client: aiohttp.ClientSession):
+    async def claim_streak_rewards(self, http_client: CloudflareScraper):
         rewards = await self.get_streak_rewards(http_client)
         pl_rewards = []
         if rewards is None:
             return
         if len(rewards) == 0:
-            logger.info(f"{self.session_name} | No ticket to claim.")
+            logger.info(self.log_message(f"No ticket to claim."))
             return
         for reward in rewards:
             pl_rewards.append(reward['id'])
@@ -441,57 +431,98 @@ class Tapper:
         payload = {
             "streak_reward_ids": pl_rewards
         }
-        claim = await http_client.post(f"{api_endpoint}api/v1/streak-reward", json=payload)
+        claim = await http_client.post(f"{API_ENDPOINT}/streak-reward", json=payload)
         if claim.status == 200:
             logger.success(f"{self.session_name} | <green>Successfully claim tickets!</green>")
         else:
             logger.warning(f"{self.session_name} | <yellow>Failed to claim ticket!</yellow>")
 
-    async def get_tickets(self, http_client: aiohttp.ClientSession):
-        res = await http_client.get(f"{api_endpoint}api/v1/spin-ticket")
+    async def get_tickets(self, http_client: CloudflareScraper):
+        res = await http_client.get(f"{API_ENDPOINT}/spin-ticket")
         if res.status == 200:
             data = await res.json()
             return data['data']
         return None
 
-    async def get_egg_pieces(self, http_client: aiohttp.ClientSession):
-        res = await http_client.get(f"{api_endpoint}api/v1/egg-piece")
+    async def get_egg_pieces(self, http_client: CloudflareScraper):
+        res = await http_client.get(f"{API_ENDPOINT}/egg-piece")
         if res.status == 200:
             data = await res.json()
             return data['data']
         return None
 
-    async def get_fusion_fee(self, type, http_client: aiohttp.ClientSession):
-        res = await http_client.get(f"{api_endpoint}api/v1/fusion-seed-fee?type={type}")
+    async def get_fusion_fee(self, type, http_client: CloudflareScraper):
+        res = await http_client.get(f"{API_ENDPOINT}/fusion-seed-fee?type={type}")
         if res.status == 200:
             data = await res.json()
             return data['data']
         return None
 
-    async def spin(self, ticketId, http_client: aiohttp.ClientSession):
+    async def spin(self, ticketId, http_client: CloudflareScraper):
         payload = {
             "ticket_id": ticketId
         }
 
-        res = await http_client.post(f"{api_endpoint}api/v1/spin-reward", json=payload)
+        res = await http_client.post(f"{API_ENDPOINT}/spin-reward", json=payload)
         if res.status == 200:
             data = await res.json()
             logger.success(f"{self.session_name} | <green>Spinned successfully - Got <cyan>{data['data']['type']}</cyan> egg pieces!</green>")
         else:
             return
 
-    async def fusion(self, egg_ids, type, http_client: aiohttp.ClientSession):
+    async def fusion(self, egg_ids, egg_type, http_client: CloudflareScraper):
         payload = {
             "egg_piece_ids": egg_ids
         }
 
-        res = await http_client.post(f"{api_endpoint}api/v1/egg-piece-merge", json=payload)
+        res = await http_client.post(f"{API_ENDPOINT}/egg-piece-merge", json=payload)
         if res.status == 200:
-            logger.success(f"{self.session_name} | <green>Successfully fusion a <cyan>{type}</cyan> egg!</green>")
+            logger.success(f"{self.session_name} | <green>Successfully fusion a <cyan>{egg_type}</cyan> egg!</green>")
         else:
             return
 
-    async def play_game(self, http_client: aiohttp.ClientSession):
+    async def get_eggs_in_inventory(self, http_client: CloudflareScraper):
+        response = await http_client.get(f"{API_ENDPOINT}/egg/me?page=1")
+        if response.status in range(200, 300) and 'json' in response.content_type:
+            response = await response.json()
+            return response.get('data', {}).get('items', [])
+
+    async def get_egg_info(self, http_client: CloudflareScraper, egg_id):
+        response = await http_client.get(f"{API_ENDPOINT}/egg/{egg_id}")
+        if response in range(200, 300) and 'json' in response.content_type:
+            return (await response.json()).get('data', {})
+
+    async def egg_transfer_fee(self, http_client: CloudflareScraper, egg_type):
+        response = await http_client.get(f"{API_ENDPOINT}/transfer/egg/estimate-fee?egg_type={egg_type}")
+        if response.status in range(200, 300) and 'json' in response.content_type:
+            return (await response.json()).get('data')
+
+    async def transfer_egg(self, http_client: CloudflareScraper, egg_id, max_fee):
+        balance = await self.get_balance(http_client)
+        if not settings.TRANSFER_EGGS or balance < max_fee:
+            return False
+        payload = {"telegram_id": settings.TRANSFER_EGGS, "egg_id": egg_id, "max_fee": max_fee}
+        response = await http_client.post(f"{API_ENDPOINT}/transfer/egg", json=payload)
+        if response.status in range(200, 300) and 'json' in response.content_type:
+            response = await response.json()
+            return bool(response.get('data', {}).get('received_by', ""))
+
+    async def transfer_all_eggs(self, http_client: CloudflareScraper):
+        eggs = await self.get_eggs_in_inventory(http_client)
+        for egg in eggs:
+            if egg.get('id') and egg.get('type') and egg.get('status', "") == "in-inventory":
+                await self.get_egg_info(http_client, egg.get('id'))
+                fee = await self.egg_transfer_fee(http_client, egg.get('type'))
+                egg_transfer = await self.transfer_egg(http_client, egg.get('id'), fee)
+                if egg_transfer:
+                    logger.success(self.log_message(
+                        f"Successfully transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
+                else:
+                    logger.warning(self.log_message(
+                        f"Failed to transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
+                await asyncio.sleep(uniform(5, 10))
+
+    async def play_game(self, http_client: CloudflareScraper):
         egg_type = {
             "common": 0,
             "uncommon": 0,
@@ -509,13 +540,13 @@ class Tapper:
                 f"Rare: <lc>{egg_type['rare']}</lc> | Epic: <lc>{egg_type['epic']}</lc> | " \
                 f"Legendary: <lc>{egg_type['legendary']}</lc>"
 
-        logger.info(f"{self.session_name} Egg pieces: \n{info_}")
+        logger.info(self.log_message(f"Egg pieces: {info_}"))
 
         tickets = await self.get_tickets(http_client)
         if tickets is None:
             return
 
-        logger.info(f"{self.session_name} | Total ticket: <cyan>{len(tickets)}</cyan>")
+        logger.info(self.log_message(f"Total ticket: <cyan>{len(tickets)}</cyan>"))
 
         play = randint(settings.SPIN_PER_ROUND[0], settings.SPIN_PER_ROUND[1])
 
@@ -544,7 +575,6 @@ class Tapper:
 
             if egg_type['common'] >= 5:
                 fusion_fee = await self.get_fusion_fee('common', http_client)
-                # print(fusion_fee)
                 if fusion_fee is None:
                     return
                 if fusion_fee/1000000000 <= settings.MAXIMUM_PRICE_TO_FUSION_COMMON:
@@ -718,7 +748,7 @@ class Tapper:
                                                 energy -= 4
                                                 if energy <= 1:
                                                     break
-                                    await self.feed_bird(bird_data['id'], wormss, http_client)
+                                    await self.feed_bird(http_client, bird_data['id'], wormss)
                                     if energy > 1:
                                         condition = False
 
@@ -735,9 +765,9 @@ class Tapper:
                         await self.upgrade_holy(http_client)
                         await asyncio.sleep(1)
 
-                    check_balance = await self.verify_balance(http_client)
+                    check_balance = await self.get_balance(http_client)
                     if check_balance:
-                        response = await http_client.post(api_claim)
+                        response = await http_client.post(f'{API_ENDPOINT}/seed/claim')
                         if response.status == 200:
                             logger.success(self.log_message(f"<green> Claim successful </green>"))
                         elif response.status == 400:
@@ -748,6 +778,10 @@ class Tapper:
 
                         await self.perform_daily_checkin(http_client)
                         await self.capture_worm(http_client)
+
+                    if settings.TRANSFER_EGGS:
+                        await self.transfer_all_eggs(http_client)
+
                     if settings.AUTO_SELL_WORMS:
                         logger.info(self.log_message("Fetching worms data to put it on sale..."))
                         worms = await self.get_worms(http_client)
@@ -763,8 +797,8 @@ class Tapper:
                                 continue
                             elif settings.QUANTITY_TO_KEEP[worm['type']]['quantity_to_keep'] == -1:
                                 continue
-                            elif settings.QUANTITY_TO_KEEP[worm['type']]['quantity_to_keep'] < self.worm_in_inv[
-                                worm['type']]:
+                            elif settings.QUANTITY_TO_KEEP[worm['type']]['quantity_to_keep'] < \
+                                    self.worm_in_inv[worm['type']]:
                                 if settings.QUANTITY_TO_KEEP[worm['type']]['sale_price'] == 0:
                                     price_to_sell = await self.get_price(worm['type'], http_client)
 

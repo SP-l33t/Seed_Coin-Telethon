@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     MAXIMUM_PRICE_TO_FUSION_EPIC: int = 3000
     MAXIMUM_PRICE_TO_FUSION_LEGENDARY: int = 20000
 
+    TRANSFER_EGGS: int | None = None
+
     AUTO_SELL_WORMS: bool = False
     QUANTITY_TO_KEEP: dict = {
         "common": {

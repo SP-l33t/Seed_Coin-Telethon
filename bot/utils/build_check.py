@@ -6,9 +6,9 @@ from random import uniform
 from bot.utils import logger
 from bot.config import settings
 
+baseUrl = "https://alb.seeddao.org"
 appUrl = "https://cf.seeddao.org/"
-baseUrl = "https://elb.seeddao.org"
-actualData = "https://raw.githubusercontent.com/vanhbakaa/Seed-App-Mine-Seed-BOT-Telegram/refs/heads/main/cgi"
+actualData = "https://raw.githubusercontent.com/vanhbakaa/nothing/refs/heads/main/seed"
 
 headers = {
     'accept': '*/*',
