@@ -31,6 +31,8 @@ class Settings(BaseSettings):
 
     TRANSFER_EGGS: int | None = None
 
+    JOIN_GUILD_BY_ID: str | None = None
+
     AUTO_SELL_WORMS: bool = False
     QUANTITY_TO_KEEP: dict = {
         "common": {

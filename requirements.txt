@@ -15,4 +15,5 @@ python-socks==2.5.1
 python-dateutil==2.9.0
 pytz==2024.2
 Telethon==1.36.0
+tenacity==9.0.0
 ua_generator

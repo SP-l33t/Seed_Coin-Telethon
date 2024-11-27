@@ -5,10 +5,11 @@ import pytz
 import time
 from urllib.parse import unquote, parse_qs
 from aiocfscrape import CloudflareScraper
-from aiohttp_proxy import ProxyConnector
+from aiohttp_proxy import ProxyConnector, SocksError
 from datetime import datetime, timezone
 from better_proxy import Proxy
 from random import uniform, randint, shuffle
+from tenacity import retry, stop_after_attempt, wait_incrementing, retry_if_exception_type
 from time import time
 
 from bot.utils.universal_telegram_client import UniversalTelegramClient
@@ -33,10 +34,14 @@ VIDEO_ANSWERS = {
             "Hot vs Cold Wallet": "Wallet",
             "Crypto vs Blockchain": "Cryptocurrency",
             "Learn Blockchain in 3 mins": "Blockchain",
-            "News affecting the BTC price": "BTCTOTHEMOON",
-            "On-chain vs Off-chain #8": "TRANSACTION",
+            "#7 News affecting BTC price": "BTCTOTHEMOON",
+            "#8 On-chain vs Off-chain": "TRANSACTION",
+            "#9 CEX vs DEX": "OKXEED",
             "#10 Bullish and Bearish": "BULLRUN",
-            "#13 SEED NFT Introduction": "BIRDIE"
+            "#11 Pre-market Explained": "BRESEED",
+            "#12 What is NFT?": "GETGEMS",
+            "#13 SEED NFT Introduction": "BIRDIE",
+            "#14 Pump and Dump": "Marketmaker"
         }
 
 
@@ -103,7 +108,29 @@ class Tapper:
             log_error(self.log_message(f"Proxy: {proxy_url} | Error: {type(error).__name__}"))
             return False
 
+    @retry(stop=stop_after_attempt(4),
+           wait=wait_incrementing(1, 4),
+           retry=retry_if_exception_type((
+                   asyncio.exceptions.TimeoutError,
+                   aiohttp.ServerDisconnectedError,
+                   aiohttp.ClientProxyConnectionError,
+                   SocksError
+           )))
+    async def make_request(self, http_client: CloudflareScraper, method, url=None, **kwargs):
+        response = await http_client.request(method, url, **kwargs)
+        if response.status in range(200, 300):
+            response_data = await response.json() if 'json' in response.content_type else await response.text()
+            return response_data or response
+        else:
+            error_json = await response.json() if 'json' in response.content_type else {}
+            error_text = f"Error: {error_json}" if error_json else ""
+            if settings.DEBUG_LOGGING:
+                logger.warning(self.log_message(
+                    f"{method} Request to {url} failed with {response.status} code. {error_text}"))
+            return error_json
+
     async def setup_profile(self, http_client: CloudflareScraper) -> None:
+        # response = await self.make_request(http_client, 'POST', url=f'{API_ENDPOINT}/profile')
         response = await http_client.post(url=f'{API_ENDPOINT}/profile')
         if response.status == 200:
             logger.info(self.log_message(f"<green>Set up account successfully!</green>"))
@@ -112,13 +139,10 @@ class Tapper:
             logger.warning(self.log_message(f"Can't get account data <red>response status: {response.status}</red>"))
 
     async def hatch_egg(self, http_client: CloudflareScraper, egg_id):
-        payload = {
-            "egg_id": egg_id
-        }
-        res = await http_client.post(f'{API_ENDPOINT}/egg-hatch/complete', json=payload)
-        if res.status == 200:
-            json_data = await res.json()
-            logger.success(self.log_message(f"Successfully hatched <lc>{json_data['data']['type']}</lc>!"))
+        payload = {"egg_id": egg_id}
+        res = await self.make_request(http_client, 'POST', f'{API_ENDPOINT}/egg-hatch/complete', json=payload)
+        if res.get('data', {}).get('type'):
+            logger.success(self.log_message(f"Successfully hatched <lc>{res.get('data', {}).get('type')}</lc>!"))
 
     async def get_first_egg_and_hatch(self, http_client: CloudflareScraper):
         res = await http_client.post(f'{API_ENDPOINT}/give-first-egg')
@@ -250,32 +274,25 @@ class Tapper:
         else:
             response = await http_client.post(f'{API_ENDPOINT}/tasks/{task_id}')
             if response.status == 200:
-                logger.success(self.log_message(f"Task <green>{task_name}</green> marked complete."))
+                logger.success(self.log_message(f"Task <lg>{task_name}</lg> marked complete."))
             else:
                 logger.error(self.log_message(f"Failed to complete task {task_name}, status code: {response.status}"))
 
     async def claim_hunt_reward(self, bird_id, http_client: CloudflareScraper):
-        payload = {
-            "bird_id": bird_id
-        }
-        response = await http_client.post(f'{API_ENDPOINT}/bird-hunt/complete', json=payload)
-        if response.status == 200:
-            response_data = await response.json()
+        payload = {"bird_id": bird_id}
+        response = (await self.make_request(http_client, 'POST', url=f'{API_ENDPOINT}/bird-hunt/complete', json=payload)).get('data', {})
+        if response.get('seed_amount'):
             logger.success(self.log_message(
-                f"Successfully claimed <green>{response_data['data']['seed_amount'] / (10 ** 9)}</green> "
-                f"seed from hunt reward."))
+                f"Successfully claimed <lg>{response['seed_amount'] / (10 ** 9)}</lg> seed from hunt reward."))
         else:
-            response_data = await response.json()
-            logger.error(self.log_message(f"Failed to claim hunt reward, status code: {response.status}. {response_data}"))
+            logger.error(self.log_message(f"Failed to claim hunt reward, status code: {response}"))
 
     async def get_bird_info(self, http_client: CloudflareScraper):
-        response = await http_client.get(f'{API_ENDPOINT}/bird/is-leader')
-        if response.status == 200:
-            response_data = await response.json()
-            return response_data['data']
+        response = (await self.make_request(http_client, 'GET', url=f'{API_ENDPOINT}/bird/is-leader')).get('data', {})
+        if response:
+            return response
         else:
-            response_data = await response.json()
-            logger.info(self.log_message(f"Get bird data failed: {response_data}"))
+            logger.info(self.log_message(f"Get bird data failed: {response}"))
             return None
 
     async def make_bird_happy(self, bird_id, http_client: CloudflareScraper):
@@ -399,10 +416,7 @@ class Tapper:
         return worm_on_sale
 
     async def check_new_user(self, http_client: CloudflareScraper):
-        response = await http_client.get(f'{API_ENDPOINT}/profile2')
-        if response.status == 200:
-            data_ = await response.json()
-            return data_['data']['bonus_claimed']
+        return (await self.make_request(http_client, 'GET', url=f'{API_ENDPOINT}/profile2')).get('data', {}).get('bonus_claimed')
 
     def refresh_data(self):
         self.total_earned_from_sale = 0
@@ -414,7 +428,7 @@ class Tapper:
             data_ = await res.json()
             return data_['data']
         else:
-            logger.warning(f"{self.session_name} | <yellow>Failed to get streak rewards</yellow>")
+            logger.warning(self.log_message(f"<yellow>Failed to get streak rewards</yellow>"))
         return None
 
     async def claim_streak_rewards(self, http_client: CloudflareScraper):
@@ -433,98 +447,78 @@ class Tapper:
         }
         claim = await http_client.post(f"{API_ENDPOINT}/streak-reward", json=payload)
         if claim.status == 200:
-            logger.success(f"{self.session_name} | <green>Successfully claim tickets!</green>")
+            logger.success(self.log_message(f"<green>Successfully claim tickets!</green>"))
         else:
-            logger.warning(f"{self.session_name} | <yellow>Failed to claim ticket!</yellow>")
+            logger.warning(self.log_message(f"<yellow>Failed to claim ticket!</yellow>"))
 
     async def get_tickets(self, http_client: CloudflareScraper):
-        res = await http_client.get(f"{API_ENDPOINT}/spin-ticket")
-        if res.status == 200:
-            data = await res.json()
-            return data['data']
-        return None
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/spin-ticket")).get('data')
 
     async def get_egg_pieces(self, http_client: CloudflareScraper):
-        res = await http_client.get(f"{API_ENDPOINT}/egg-piece")
-        if res.status == 200:
-            data = await res.json()
-            return data['data']
-        return None
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/egg-piece")).get('data')
 
-    async def get_fusion_fee(self, type, http_client: CloudflareScraper):
-        res = await http_client.get(f"{API_ENDPOINT}/fusion-seed-fee?type={type}")
-        if res.status == 200:
-            data = await res.json()
-            return data['data']
-        return None
+    async def get_fusion_fee(self, egg_type, http_client: CloudflareScraper):
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/fusion-seed-fee?type={egg_type}")).get('data')
 
     async def spin(self, ticketId, http_client: CloudflareScraper):
-        payload = {
-            "ticket_id": ticketId
-        }
+        payload = {"ticket_id": ticketId}
 
         res = await http_client.post(f"{API_ENDPOINT}/spin-reward", json=payload)
         if res.status == 200:
             data = await res.json()
-            logger.success(f"{self.session_name} | <green>Spinned successfully - Got <cyan>{data['data']['type']}</cyan> egg pieces!</green>")
+            logger.success(self.log_message(
+                f"Span successfully - Got <lc>{data['data']['type']}</lc> egg pieces!"))
         else:
             return
 
     async def fusion(self, egg_ids, egg_type, http_client: CloudflareScraper):
-        payload = {
-            "egg_piece_ids": egg_ids
-        }
+        payload = {"egg_piece_ids": egg_ids}
 
         res = await http_client.post(f"{API_ENDPOINT}/egg-piece-merge", json=payload)
         if res.status == 200:
-            logger.success(f"{self.session_name} | <green>Successfully fusion a <cyan>{egg_type}</cyan> egg!</green>")
+            logger.success(self.log_message(f"Successfully fusion a <cyan>{egg_type}</cyan> egg!"))
         else:
             return
 
     async def get_eggs_in_inventory(self, http_client: CloudflareScraper):
-        response = await http_client.get(f"{API_ENDPOINT}/egg/me?page=1")
-        if response.status in range(200, 300) and 'json' in response.content_type:
-            response = await response.json()
-            return response.get('data', {}).get('items', [])
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/egg/me?page=1")).get('data', {}).get('items', [])
 
     async def get_egg_info(self, http_client: CloudflareScraper, egg_id):
-        response = await http_client.get(f"{API_ENDPOINT}/egg/{egg_id}")
-        if response in range(200, 300) and 'json' in response.content_type:
-            return (await response.json()).get('data', {})
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/egg/{egg_id}")).get('data', {})
 
-    async def egg_transfer_fee(self, http_client: CloudflareScraper, egg_type):
-        response = await http_client.get(f"{API_ENDPOINT}/transfer/egg/estimate-fee?egg_type={egg_type}")
-        if response.status in range(200, 300) and 'json' in response.content_type:
-            return (await response.json()).get('data')
-
-    async def transfer_egg(self, http_client: CloudflareScraper, egg_id, max_fee):
-        balance = await self.get_balance(http_client)
-        if settings.TRANSFER_EGGS == self.user_data.get('id'):
-            return 'self'
-        elif not settings.TRANSFER_EGGS or balance < max_fee:
-            return False
-        payload = {"telegram_id": settings.TRANSFER_EGGS, "egg_id": egg_id, "max_fee": max_fee}
-        response = await http_client.post(f"{API_ENDPOINT}/transfer/egg", json=payload)
-        if response.status in range(200, 300) and 'json' in response.content_type:
-            response = await response.json()
-            return bool(response.get('data', {}).get('received_by', ""))
-
-    async def transfer_all_eggs(self, http_client: CloudflareScraper):
-        eggs = await self.get_eggs_in_inventory(http_client)
-        for egg in eggs:
-            if egg.get('id') and egg.get('type') and egg.get('status', "") == "in-inventory":
-                await self.get_egg_info(http_client, egg.get('id'))
-                fee = await self.egg_transfer_fee(http_client, egg.get('type'))
-                egg_transfer = await self.transfer_egg(http_client, egg.get('id'), fee)
-                if egg_transfer == 'self':
-                    return
-                if egg_transfer:
-                    logger.success(self.log_message(
-                        f"Successfully transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
-                else:
-                    logger.warning(self.log_message(
-                        f"Failed to transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
-                await asyncio.sleep(uniform(5, 10))
+    # async def egg_transfer_fee(self, http_client: CloudflareScraper, egg_type):
+    #     response = await http_client.get(f"{API_ENDPOINT}/transfer/egg/estimate-fee?egg_type={egg_type}")
+    #     if response.status in range(200, 300) and 'json' in response.content_type:
+    #         return (await response.json()).get('data')
+    #
+    # async def transfer_egg(self, http_client: CloudflareScraper, egg_id, max_fee):
+    #     balance = await self.get_balance(http_client)
+    #     if settings.TRANSFER_EGGS == self.user_data.get('id'):
+    #         return 'self'
+    #     elif not settings.TRANSFER_EGGS or balance < max_fee:
+    #         return False
+    #     payload = {"telegram_id": settings.TRANSFER_EGGS, "egg_id": egg_id, "max_fee": max_fee}
+    #     response = await http_client.post(f"{API_ENDPOINT}/transfer/egg", json=payload)
+    #     if response.status in range(200, 300) and 'json' in response.content_type:
+    #         response = await response.json()
+    #         return bool(response.get('data', {}).get('received_by', ""))
+    #
+    # async def transfer_all_eggs(self, http_client: CloudflareScraper):
+    #     eggs = await self.get_eggs_in_inventory(http_client)
+    #     for egg in eggs:
+    #         if egg.get('id') and egg.get('type') and egg.get('status', "") == "in-inventory":
+    #             await self.get_egg_info(http_client, egg.get('id'))
+    #             fee = await self.egg_transfer_fee(http_client, egg.get('type'))
+    #             egg_transfer = await self.transfer_egg(http_client, egg.get('id'), fee)
+    #             if egg_transfer == 'self':
+    #                 return
+    #             if egg_transfer:
+    #                 logger.success(self.log_message(
+    #                     f"Successfully transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
+    #             else:
+    #                 logger.warning(self.log_message(
+    #                     f"Failed to transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
+    #             await asyncio.sleep(uniform(5, 10))
 
     async def play_game(self, http_client: CloudflareScraper):
         egg_type = {
@@ -561,7 +555,7 @@ class Tapper:
             await self.spin(ticket['id'], http_client)
             await self.get_tickets(http_client)
             await self.get_egg_pieces(http_client)
-            await asyncio.sleep(randint(2,5))
+            await asyncio.sleep(uniform(2, 5))
 
         if settings.AUTO_FUSION:
             egg_type = {
@@ -647,6 +641,31 @@ class Tapper:
 
                     await self.fusion(pl_data, 'legendary', http_client)
 
+    async def get_current_guild(self, http_client: CloudflareScraper):
+        return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/guild/member/detail")).get('data')
+
+    async def get_guild_details(self, http_client: CloudflareScraper, guild_id):
+        resp = await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/guild/detail?guild_id={guild_id}&sort_by=total_hunted")
+        return resp.get('data', {}).get('guild_id') == guild_id
+
+    async def join_guild_request(self, http_client: CloudflareScraper, guild_id):
+        payload = {"guild_id": guild_id}
+        resp = await self.make_request(http_client, 'POST', url=f"{API_ENDPOINT}/guild/join", json=payload)
+        return resp.get('data', {}).get('guild_id') == guild_id
+
+    async def join_guild_routine(self, http_client: CloudflareScraper):
+        guild_id = settings.JOIN_GUILD_BY_ID
+        await asyncio.sleep(uniform(1, 3))
+        if settings.JOIN_GUILD_BY_ID:
+            if not await self.get_current_guild(http_client):
+                if await self.get_guild_details(http_client, guild_id):
+                    await asyncio.sleep(uniform(3, 7))
+                    joined_guild = await self.join_guild_request(http_client, guild_id)
+                    if joined_guild:
+                        logger.success(self.log_message(f'Successfully joined guild with id: {guild_id}'))
+                    else:
+                        logger.warning(self.log_message(f"Couldn't join guild with id: {guild_id}"))
+
     async def run(self) -> None:
         random_delay = uniform(1, settings.RANDOM_SESSION_START_DELAY)
         logger.info(self.log_message(f"Bot will start in <light-red>{int(random_delay)}s</light-red>"))
@@ -663,7 +682,7 @@ class Tapper:
                     await asyncio.sleep(300)
                     continue
 
-                token_live_time = randint(3500, 3600)
+                token_live_time = uniform(3500, 3600)
                 try:
                     if time() - access_token_created_time >= token_live_time or not tg_web_data:
                         tg_web_data = await self.get_tg_web_data()
@@ -676,11 +695,9 @@ class Tapper:
                         access_token_created_time = time()
 
                         http_client.headers["telegram-data"] = tg_web_data
-                        await asyncio.sleep(delay=randint(10, 15))
+                        await asyncio.sleep(delay=uniform(10, 15))
 
-                    not_new_user = await self.check_new_user(http_client)
-
-                    if not_new_user is False:
+                    if await self.check_new_user(http_client) is False:
                         logger.info(self.log_message(f"Setting up new account..."))
                         await self.setup_profile(http_client)
 
@@ -689,12 +706,14 @@ class Tapper:
 
                     await self.fetch_profile(http_client)
 
+                    await self.join_guild_routine(http_client)
+
                     if settings.AUTO_START_HUNT:
                         bird_data = await self.get_bird_info(http_client)
                         if bird_data is None:
                             logger.info(self.log_message(f"Can't get bird data..."))
                         elif bird_data['owner_id'] != self.user_id:
-                            logger.warning(self.log_message(f"<yellow>Bird is not your: {bird_data}</yellow>"))
+                            logger.warning(self.log_message(f"<yellow>Bird is not yours: {bird_data}</yellow>"))
                         elif bird_data['status'] == "hunting":
 
                             try:
@@ -714,6 +733,7 @@ class Tapper:
                             else:
                                 logger.info(self.log_message(f"<white>Hunt completed, claiming reward...</white>"))
                                 await self.claim_hunt_reward(bird_data['id'], http_client)
+                            await asyncio.sleep(2, 7)
                         else:
                             condition = True
                             if bird_data['happiness_level'] == 0:
@@ -783,8 +803,8 @@ class Tapper:
                         await self.perform_daily_checkin(http_client)
                         await self.capture_worm(http_client)
 
-                    if settings.TRANSFER_EGGS:
-                        await self.transfer_all_eggs(http_client)
+                    # if settings.TRANSFER_EGGS:
+                    #     await self.transfer_all_eggs(http_client)
 
                     if settings.AUTO_SELL_WORMS:
                         logger.info(self.log_message("Fetching worms data to put it on sale..."))
@@ -817,7 +837,7 @@ class Tapper:
 
                     if settings.AUTO_SPIN:
                         await self.claim_streak_rewards(http_client)
-                        await asyncio.sleep(randint(1, 4))
+                        await asyncio.sleep(uniform(1, 4))
                         await self.play_game(http_client)
 
                     delay_time = uniform(3500, 7200)
@@ -827,8 +847,8 @@ class Tapper:
                     raise error
 
                 except Exception as error:
-                    sleep_time = randint(60, 120)
-                    log_error(self.log_message(f"Unknown error: {error}. Sleep {sleep_time} seconds"))
+                    sleep_time = uniform(60, 120)
+                    log_error(self.log_message(f"Unknown error: {error}. Sleep {int(sleep_time)} seconds"))
                     await asyncio.sleep(delay=sleep_time)
 
 
