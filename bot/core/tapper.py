@@ -7,6 +7,7 @@ from urllib.parse import unquote, parse_qs
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector, SocksError
 from datetime import datetime, timezone
+from dateutil import parser
 from better_proxy import Proxy
 from random import uniform, randint, shuffle
 from tenacity import retry, stop_after_attempt, wait_incrementing, retry_if_exception_type
@@ -41,7 +42,12 @@ VIDEO_ANSWERS = {
             "#11 Pre-market Explained": "BRESEED",
             "#12 What is NFT?": "GETGEMS",
             "#13 SEED NFT Introduction": "BIRDIE",
-            "#14 Pump and Dump": "Marketmaker"
+            "#14 Pump and Dump": "Marketmaker",
+            "What is Tokenomics?": "SEEDNOMICS",
+            "What Is Market Maker?": "WAVEMAKER",
+            "BTC Price Prediction": "200KBTC",
+            "What is Listing?": "SEEDTOKEN",
+            "What Affects Token Price?": "POSINEGATIVE",
         }
 
 
@@ -157,20 +163,16 @@ class Tapper:
         if response.status == 200:
             response_json = await response.json()
             self.user_id = response_json['data']['id']
-            logger.info(self.log_message(f"Got into seed app - Username: <green>{response_json['data']['name']}</green>"))
+            logger.info(self.log_message(f"Got into seed app - Username: <lg>{response_json['data']['name']}</lg>"))
             if response_json['data']['give_first_egg'] is False:
                 await self.get_first_egg_and_hatch(http_client)
             upgrade_levels = {}
-            for upgrade in response_json['data']['upgrades']:
+            for upgrade in response_json.get('data', {}).get('upgrades', []):
                 upgrade_type = upgrade['upgrade_type']
-                upgrade_level = upgrade['upgrade_level']
-                if upgrade_type in upgrade_levels:
-                    if upgrade_level > upgrade_levels[upgrade_type]:
-                        upgrade_levels[upgrade_type] = upgrade_level
-                else:
-                    upgrade_levels[upgrade_type] = upgrade_level
-            for upgrade_type, level in upgrade_levels.items():
-                logger.info(self.log_message(f"<cyan>{upgrade_type.capitalize()} Level: {level + 1}</cyan>"))
+                upgrade_levels[upgrade_type] = max(upgrade_levels.get(upgrade_type, 0), upgrade['upgrade_level'])
+
+            if upgrades := " | ".join(f"<lc>{t.capitalize()}</lc> Level: <lc>{l + 1}</lc>" for t, l in upgrade_levels.items()):
+                logger.info(self.log_message(f"Upgrades: {upgrades}"))
         else:
             logger.warning(self.log_message(f"Can't get account data <red>response status: {response.status}</red>"))
 
@@ -197,6 +199,12 @@ class Tapper:
             return balance_info.get('data', 0)
         else:
             logger.warning(self.log_message(f"<red>Balance: Error | {response.status}</red>"))
+
+    async def get_gift_of_encounter(self, http_client: CloudflareScraper):
+        return (await self.make_request(http_client, 'GET', url=f'{API_ENDPOINT}/gift-of-encounter')).get('data', {})
+
+    async def claim_gift_of_encounter(self, http_client: CloudflareScraper):
+        return (await self.make_request(http_client, 'POST', url=f'{API_ENDPOINT}/gift-of-encounter')).status == 200
 
     async def perform_daily_checkin(self, http_client: CloudflareScraper):
         response = await http_client.post(f'{API_ENDPOINT}/login-bonuses')
@@ -705,6 +713,15 @@ class Tapper:
                         await first_run.append_recurring_session(self.session_name)
 
                     await self.fetch_profile(http_client)
+
+                    encounter_gift = await self.get_gift_of_encounter(http_client)
+                    next_claim = parser.isoparse(encounter_gift.get('next_claim_from', "2025-12-31T12:00:00Z")).timestamp()
+                    if datetime.now(timezone.utc).timestamp() >= next_claim:
+                        claim_result = await self.claim_gift_of_encounter(http_client)
+                        if claim_result:
+                            logger.success(self.log_message(
+                                f"Successfully claimed Encounter reward: "
+                                f"<lc>{encounter_gift.get('rewards')[encounter_gift.get('claimed_count')]/1000000000}</lc>"))
 
                     await self.join_guild_routine(http_client)
 
