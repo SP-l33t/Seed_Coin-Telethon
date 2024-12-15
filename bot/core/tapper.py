@@ -733,24 +733,20 @@ class Tapper:
                             await asyncio.sleep(uniform(2, 7))
 
                         if start_hunt:
-                            condition = True
                             if bird_data['happiness_level'] == 0:
                                 logger.info(self.log_message(f"Bird is not happy, attemping to make bird happy..."))
                                 check = await self.make_bird_happy(bird_data['id'], http_client)
                                 if check:
-                                    logger.success(self.log_message(f"Successfully <green>made bird happy!</green>"))
+                                    logger.success(self.log_message(f"Successfully <lg>made bird happy!</lg>"))
                                 else:
                                     logger.info(self.log_message(f"Failed to make bird happy!"))
-                                    condition = False
                             if bird_data['energy_level'] == 0:
                                 logger.info(self.log_message(f"Bird is hungry, attemping to feed bird..."))
                                 worms = await self.get_worm_data(http_client)
                                 if worms is None:
-                                    condition = False
                                     logger.info(self.log_message(f"Failed to fetch worm data"))
                                 elif len(worms) == 0:
                                     logger.warning(self.log_message(f"You dont have any worm to feed bird!"))
-                                    condition = False
                                 else:
                                     try:
                                         energy = (bird_data['energy_max'] - bird_data['energy_level']) / 1000000000
@@ -771,11 +767,8 @@ class Tapper:
                                                 if energy <= 1:
                                                     break
                                     await self.feed_bird(http_client, bird_data['id'], wormss)
-                                    if energy > 1:
-                                        condition = False
 
-                            if condition:
-                                await self.start_hunt(bird_data['id'], http_client)
+                            await self.start_hunt(bird_data['id'], http_client)
 
                     if settings.AUTO_UPGRADE_STORAGE:
                         await self.upgrade_storage(http_client)
