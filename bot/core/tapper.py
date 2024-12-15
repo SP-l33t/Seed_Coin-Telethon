@@ -23,11 +23,12 @@ from .headers import headers, get_sec_ch_ua
 API_ENDPOINT = "https://alb.seeddao.org/api/v1"
 # TODO Enable name task and refer
 SKIP_TASK_CATEGORIES = ["telegram-boost",
-                        "telegram-name-include",
                         "refer",
                         "collaboration",
                         "mint-bird-nft",
-                        "ton-wallet-connect"]
+                        "ton-wallet-connect",
+                        "face-scan",
+                        "Join community"]
 VIDEO_ANSWERS = {
             "What is TON?": "Ton",
             "Coin vs Token": "Tokens",
@@ -48,6 +49,10 @@ VIDEO_ANSWERS = {
             "BTC Price Prediction": "200KBTC",
             "What is Listing?": "SEEDTOKEN",
             "What Affects Token Price?": "POSINEGATIVE",
+            "#20 What is Rug Pull?": "ANTIRUGPULL",
+            "#21 How to spot a Rug Pull?": "NOHANDSNORUG",
+            "#22 Fat Finger Error": "WRONGFINGER",
+            "#23 Crypto Slang Part 1": "MOONINGWITHSEED",
         }
 
 
@@ -62,7 +67,7 @@ class Tapper:
             logger.critical(self.log_message('CHECK accounts_config.json as it might be corrupted'))
             exit(-1)
 
-        self.headers = headers
+        self.headers = headers.copy()
         user_agent = session_config.get('user_agent')
         self.headers['user-agent'] = user_agent
         self.headers.update(**get_sec_ch_ua(user_agent))
@@ -265,6 +270,8 @@ class Tapper:
         for task in tasks['data']:
             if task.get('type', "") in SKIP_TASK_CATEGORIES:
                 continue
+            elif task.get('type', "") == "telegram-name-include":
+                await self.add_emoji_to_last_name()
             if not task['task_user'] or task['task_user']['completed'] is False:
                 await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
                 await asyncio.sleep(uniform(5, 10))
@@ -494,40 +501,6 @@ class Tapper:
     async def get_egg_info(self, http_client: CloudflareScraper, egg_id):
         return (await self.make_request(http_client, 'GET', url=f"{API_ENDPOINT}/egg/{egg_id}")).get('data', {})
 
-    # async def egg_transfer_fee(self, http_client: CloudflareScraper, egg_type):
-    #     response = await http_client.get(f"{API_ENDPOINT}/transfer/egg/estimate-fee?egg_type={egg_type}")
-    #     if response.status in range(200, 300) and 'json' in response.content_type:
-    #         return (await response.json()).get('data')
-    #
-    # async def transfer_egg(self, http_client: CloudflareScraper, egg_id, max_fee):
-    #     balance = await self.get_balance(http_client)
-    #     if settings.TRANSFER_EGGS == self.user_data.get('id'):
-    #         return 'self'
-    #     elif not settings.TRANSFER_EGGS or balance < max_fee:
-    #         return False
-    #     payload = {"telegram_id": settings.TRANSFER_EGGS, "egg_id": egg_id, "max_fee": max_fee}
-    #     response = await http_client.post(f"{API_ENDPOINT}/transfer/egg", json=payload)
-    #     if response.status in range(200, 300) and 'json' in response.content_type:
-    #         response = await response.json()
-    #         return bool(response.get('data', {}).get('received_by', ""))
-    #
-    # async def transfer_all_eggs(self, http_client: CloudflareScraper):
-    #     eggs = await self.get_eggs_in_inventory(http_client)
-    #     for egg in eggs:
-    #         if egg.get('id') and egg.get('type') and egg.get('status', "") == "in-inventory":
-    #             await self.get_egg_info(http_client, egg.get('id'))
-    #             fee = await self.egg_transfer_fee(http_client, egg.get('type'))
-    #             egg_transfer = await self.transfer_egg(http_client, egg.get('id'), fee)
-    #             if egg_transfer == 'self':
-    #                 return
-    #             if egg_transfer:
-    #                 logger.success(self.log_message(
-    #                     f"Successfully transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
-    #             else:
-    #                 logger.warning(self.log_message(
-    #                     f"Failed to transferred <lg>{egg.get('type')}</lg> egg to <lg>{settings.TRANSFER_EGGS}</lg>"))
-    #             await asyncio.sleep(uniform(5, 10))
-
     async def play_game(self, http_client: CloudflareScraper):
         egg_type = {
             "common": 0,
@@ -661,6 +634,10 @@ class Tapper:
         resp = await self.make_request(http_client, 'POST', url=f"{API_ENDPOINT}/guild/join", json=payload)
         return resp.get('data', {}).get('guild_id') == guild_id
 
+    async def add_emoji_to_last_name(self):
+        if '🌱' not in self.user_data.get('last_name'):
+            await self.tg_client.update_profile(last_name=f"{self.user_data.get('last_name', '')} 🌱SEED")
+
     async def join_guild_routine(self, http_client: CloudflareScraper):
         guild_id = settings.JOIN_GUILD_BY_ID
         await asyncio.sleep(uniform(1, 3))
@@ -715,8 +692,10 @@ class Tapper:
                     await self.fetch_profile(http_client)
 
                     encounter_gift = await self.get_gift_of_encounter(http_client)
-                    next_claim = parser.isoparse(encounter_gift.get('next_claim_from', "2025-12-31T12:00:00Z")).timestamp()
-                    if datetime.now(timezone.utc).timestamp() >= next_claim:
+                    next_claim_from = parser.isoparse(encounter_gift.get('next_claim_from', "2025-12-31T12:00:00Z")).timestamp()
+                    next_claim_to = parser.isoparse(encounter_gift.get('next_claim_to', "2025-12-31T12:00:00Z")).timestamp()
+                    current_timestamp = datetime.now(timezone.utc).timestamp()
+                    if next_claim_from <= current_timestamp <= next_claim_to:
                         claim_result = await self.claim_gift_of_encounter(http_client)
                         if claim_result:
                             logger.success(self.log_message(
@@ -726,32 +705,34 @@ class Tapper:
                     await self.join_guild_routine(http_client)
 
                     if settings.AUTO_START_HUNT:
+                        start_hunt = True
                         bird_data = await self.get_bird_info(http_client)
                         if bird_data is None:
                             logger.info(self.log_message(f"Can't get bird data..."))
                         elif bird_data['owner_id'] != self.user_id:
-                            logger.warning(self.log_message(f"<yellow>Bird is not yours: {bird_data}</yellow>"))
+                            logger.warning(self.log_message(f"<ly>Bird is not yours: {bird_data}</ly>"))
                         elif bird_data['status'] == "hunting":
-
+                            start_hunt = False
                             try:
                                 given_time = datetime.fromisoformat(bird_data['hunt_end_at'])
                                 timestamp_naive = given_time.replace(tzinfo=None)
                             except:
-                                import dateutil.parser
-                                timestamp_naive = dateutil.parser.isoparse(bird_data['hunt_end_at'])
-                            now = datetime.now(timezone.utc)
+                                timestamp_naive = parser.isoparse(bird_data['hunt_end_at'])
 
                             # If the parsed timestamp is naive, make it aware in UTC
                             if timestamp_naive.tzinfo is None:
                                 timestamp_naive = timestamp_naive.replace(tzinfo=timezone.utc)
 
+                            now = datetime.now(timezone.utc)
                             if now < timestamp_naive:
                                 logger.info(self.log_message(f"Bird currently hunting..."))
                             else:
                                 logger.info(self.log_message(f"<white>Hunt completed, claiming reward...</white>"))
                                 await self.claim_hunt_reward(bird_data['id'], http_client)
-                            await asyncio.sleep(2, 7)
-                        else:
+                                start_hunt = True
+                            await asyncio.sleep(uniform(2, 7))
+
+                        if start_hunt:
                             condition = True
                             if bird_data['happiness_level'] == 0:
                                 logger.info(self.log_message(f"Bird is not happy, attemping to make bird happy..."))
@@ -810,7 +791,7 @@ class Tapper:
                     if check_balance:
                         response = await http_client.post(f'{API_ENDPOINT}/seed/claim')
                         if response.status == 200:
-                            logger.success(self.log_message(f"<green> Claim successful </green>"))
+                            logger.success(self.log_message(f"<lg> Claim successful </lg>"))
                         elif response.status == 400:
                             logger.info(self.log_message(f"Not yet time to claim"))
                         else:
@@ -819,9 +800,6 @@ class Tapper:
 
                         await self.perform_daily_checkin(http_client)
                         await self.capture_worm(http_client)
-
-                    # if settings.TRANSFER_EGGS:
-                    #     await self.transfer_all_eggs(http_client)
 
                     if settings.AUTO_SELL_WORMS:
                         logger.info(self.log_message("Fetching worms data to put it on sale..."))
