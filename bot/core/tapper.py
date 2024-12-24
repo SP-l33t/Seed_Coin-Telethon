@@ -270,7 +270,8 @@ class Tapper:
         for task in tasks['data']:
             if task.get('type', "") in SKIP_TASK_CATEGORIES:
                 continue
-            elif task.get('type', "") == "telegram-name-include":
+            elif task.get('type', "") == "telegram-name-include" and \
+                    not task.get('task_user', {}).get('completed', False):
                 await self.add_emoji_to_last_name()
             if not task['task_user'] or task['task_user']['completed'] is False:
                 await self.mark_task_complete(task['id'], task['name'], task['type'], http_client)
